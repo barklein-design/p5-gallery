@@ -1,7 +1,7 @@
 let particle = null;
 let visited = new Set();
 
-let canvasSize = 620;
+let canvasSize = 520;
 let cellSize = 2;
 
 let speedSlider;
@@ -19,6 +19,7 @@ let directions = [
 
 function setup() {
   createCanvas(canvasSize, canvasSize);
+  pixelDensity(1);
   background(255);
   frameRate(60);
 
@@ -38,7 +39,10 @@ function setup() {
   });
 
   createP("");
+
   createButton("Clear").mousePressed(resetSketch);
+
+  createButton("Download Image").mousePressed(downloadImage);
 
   statusText = createP("Click the canvas to start");
 }
@@ -68,11 +72,11 @@ function cellKey(x, y) {
   return x + "," + y;
 }
 
-// Store occupied positions in pixel coordinates
 function markVisited(x, y) {
   visited.add(cellKey(round(x), round(y)));
 }
 
+// Collision detection in pixel coordinates
 function isFree(x, y, currentX = -1, currentY = -1) {
   if (
     x < 0 || x >= width ||
@@ -174,6 +178,7 @@ class Particle {
   }
 }
 
+// Start a new particle with a mouse click
 function mousePressed() {
   if (particle) return;
 
@@ -194,9 +199,27 @@ function mousePressed() {
   }
 }
 
+// Clear canvas
 function resetSketch() {
   particle = null;
   visited.clear();
   background(255);
   statusText.html("Click the canvas to start");
+}
+
+// Download PNG with an opaque white background
+function downloadImage() {
+  let img = createGraphics(width, height);
+  img.pixelDensity(1);
+
+  // Solid white background
+  img.background(255);
+
+  // Copy the current canvas
+  img.image(get(), 0, 0);
+
+  // Save as PNG
+  saveCanvas(img.canvas, "generative-strips", "png");
+
+  img.remove();
 }
