@@ -2,6 +2,8 @@
 
 A tiny gallery of small [p5.js](https://p5js.org) sketches. Flip between them with the ← → buttons (or the arrow keys).
 
+**Live:** https://omrialloro.github.io/p5-gallery/ (updates automatically after each merge to `main`)
+
 ## Run it locally
 
 Clone the repo and serve the folder with any static server. Opening `index.html` directly from disk won't work, because browsers block loading the sketches over `file://`.
