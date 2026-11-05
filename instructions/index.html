@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>תרגיל בית: אקראיות וכאוס</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 32px 16px 56px; background: #fff; color: #1f2933;
+      font: 17px/1.65 Arial, "Helvetica Neue", sans-serif;
+    }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 30px; line-height: 1.25; margin: 0 0 28px; }
+    h2 { font-size: 19px; margin: 24px 0 6px; }
+    a { color: #0b5cad; overflow-wrap: anywhere; }
+    ol { margin: 6px 0; padding-inline-start: 24px; }
+    li { margin: 4px 0; }
+    p { margin: 6px 0; }
+
+    .tag {
+      display: inline-block; padding: 4px 12px; border-radius: 4px;
+      font-size: 14px; font-weight: 700; color: #fff;
+    }
+
+    /* Part for students: light, regular type */
+    .students { border: 2px solid #0b5cad; border-radius: 8px; padding: 20px 24px 24px; }
+    .students .tag { background: #0b5cad; }
+
+    /* Part for Claude: dark, monospace type */
+    .claude { margin-top: 28px; background: #17212b; color: #e8edf2; border-radius: 8px; padding: 20px 24px 24px; }
+    .claude .tag { background: #c8662b; }
+    .claude-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    #copy {
+      font: 700 15px Arial, sans-serif; padding: 9px 18px; border: 0; border-radius: 6px;
+      background: #fff; color: #17212b; cursor: pointer;
+    }
+    #copy:hover { background: #dfe6ec; }
+    #prompt {
+      margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+      font: 15px/1.7 "Courier New", Menlo, Consolas, monospace;
+    }
+    #prompt mark { background: #ffe27a; color: #17212b; padding: 0 4px; border-radius: 3px; font-weight: 700; }
+
+    @media print {
+      #copy { display: none; }
+      body { padding: 0; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>תרגיל בית: אקראיות וכאוס</h1>
+
+  <section class="students">
+    <span class="tag">חלק 1: הוראות לסטודנטים</span>
+
+    <h2>המשימה</h2>
+    <p>כתבו יישום ויזואלי קטן בספריית p5, המבוסס על עקרונות האקראיות והכאוס שלמדנו. זו יכולה להיות מברשת ציור, מחולל אקראי, אפליקציה ויזואלית הנשלטת על ידי פרמטרים, או כל דבר ברוח דומה.</p>
+    <p>דוגמאות אפשר למצוא <a href="https://omrialloro.github.io/p5-gallery/">בגלריה</a>.</p>
+
+    <h2>הגשה</h2>
+    <ol>
+      <li>ודאו שיש לכם <a href="https://github.com/signup">חשבון GitHub</a> ושמותקן אצלכם Claude Code.</li>
+      <li>פתחו את Claude Code והעתיקו אליו את כל הפרומפט מחלק 2.</li>
+      <li>השלימו בפרומפט את שלושת הפרטים המסומנים בצהוב ושלחו.</li>
+      <li>עקבו אחרי ההנחיות של Claude Code עד שתקבלו קישור ל-pull request. בשלב הזה ההגשה הושלמה.</li>
+    </ol>
+    <p>לאחר שאאשר את ה-pull request, היישום יופיע בגלריה תוך כמה דקות.</p>
+  </section>
+
+  <section class="claude">
+    <div class="claude-head">
+      <span class="tag">חלק 2: פרומפט ל-Claude (להעתיק כמו שהוא)</span>
+      <button id="copy" type="button">העתקת הפרומפט</button>
+    </div>
+<pre id="prompt">הגש בשבילי את היישום שלי לגלריית p5 של הקורס. בצע את כל השלבים בעצמך, והסבר לי בקצרה מה אתה עושה.
+
+השם שלי: <mark>[שם פרטי ומשפחה]</mark>
+שם הפרויקט: <mark>[שם הפרויקט]</mark>
+הקוד: <mark>[הדביקו כאן את הקוד, או כתבו את הנתיב לקובץ]</mark>
+
+1. הכנה: בדוק ש-git ו-GitHub CLI (gh) מותקנים, ואם חסר משהו התקן אותו. בדוק שאני מחובר ל-GitHub ושמוגדרים ב-git שם ומייל. אם צריך להתחבר, הנחה אותי להריץ gh auth login והמתן עד שאסיים. לעולם אל תבקש ממני סיסמה או טוקן בצ'אט.
+
+2. עותק של הפרויקט: צור fork של omrialloro/p5-gallery בחשבון שלי והורד אותו למחשב. אם כבר יש לי עותק, עדכן אותו מהפרויקט המקורי. צור branch חדש מהגרסה העדכנית של main.
+
+3. הוספת היישום: צור תיקייה חדשה בתוך sketches בשם &lt;שם-פרטי&gt;-&lt;שם-הפרויקט&gt;, באנגלית, באותיות קטנות ועם מקפים. אם השם תפוס, בחר שם דומה. שמור בה את הקוד כקובץ בשם sketch.js, בלי לשנות את הקוד, וצרף באותה תיקייה תמונות או קבצים אחרים שהיישום משתמש בהם. אל תשנה אף קובץ אחר בפרויקט, גם לא את index.html.
+
+4. בדיקה: הפעל שרת מקומי מתיקיית הפרויקט עם python3 -m http.server 8123 (או python ב-Windows) ותן לי קישור ישיר בצורה http://localhost:8123/#&lt;שם-התיקייה&gt;. עצור וחכה שאאשר שהיישום עובד. אם משהו לא עובד, הסבר לי מה הבעיה, ושנה את הקוד רק אם אאשר.
+
+5. הגשה: אחרי שאאשר, עצור את השרת, עשה commit ו-push ל-fork שלי, ופתח pull request אל הענף main של omrialloro/p5-gallery. ודא שה-pull request כולל רק קבצים מהתיקייה החדשה.
+
+6. סיום: תן לי את הקישור ל-pull request.</pre>
+  </section>
+</main>
+
+<script>
+  const button = document.getElementById('copy');
+  const prompt = document.getElementById('prompt');
+
+  button.addEventListener('click', async () => {
+    const text = prompt.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Some browsers block the clipboard API for local files
+      const area = document.createElement('textarea');
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+    }
+    button.textContent = 'הועתק';
+    setTimeout(() => { button.textContent = 'העתקת הפרומפט'; }, 1500);
+  });
+</script>
+</body>
+</html>
