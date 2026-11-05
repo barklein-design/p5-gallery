@@ -6,7 +6,7 @@ A tiny gallery of small [p5.js](https://p5js.org) sketches. Flip between them wi
 
 ## Run it locally
 
-Clone the repo and serve the folder with any static server. Opening `index.html` directly from disk won't work, because browsers block loading the sketches over `file://`.
+Clone the repo and serve the folder with Python's built-in server, which is how the gallery finds the sketches locally. Opening `index.html` directly from disk won't work.
 
 ```bash
 git clone https://github.com/omrialloro/p5-gallery.git
@@ -18,29 +18,24 @@ Then open http://localhost:8123.
 
 ## Add your sketch
 
-1. Put your p5 script in `sketches/`, e.g. `sketches/my-sketch.js`. Write it as a normal global-mode sketch with `setup()` and `draw()`, exactly as you would in the p5 web editor. No changes needed.
-2. Add one line to the `SKETCHES` list in `index.html`:
-
-   ```js
-   { name: 'My sketch', file: 'sketches/my-sketch.js' },
-   ```
-
+1. Create a new folder inside `sketches/`, with a short, lowercase, dash-separated name, e.g. `sketches/my-sketch/`. The folder name becomes the sketch's name in the gallery ("My sketch").
+2. Save your p5 script in that folder as `sketch.js`. Write it as a normal global-mode sketch with `setup()` and `draw()`, exactly as you would in the p5 web editor. Images or other files your sketch uses go in the same folder.
 3. Check it in the browser, then open a pull request.
 
-Each sketch runs in its own iframe ([runner.html](runner.html)), so your variable and function names can't clash with anyone else's.
+The gallery finds your folder automatically. Each sketch runs in its own iframe ([runner.html](runner.html)), so your variable and function names can't clash with anyone else's.
 
 ## Contributing
 
 - **Fork** this repo on GitHub, make your changes on a branch, and open a **pull request**.
-- One sketch per file. Give the file a short, lowercase, dash-separated name.
-- Please don't edit other people's sketches without asking them.
+- **Only add your own folder inside `sketches/`.** Don't change `index.html` or any other file, and don't edit other people's sketches.
 
 ## Project layout
 
 ```
-index.html     the gallery page and the list of sketches
-runner.html    loads p5 and runs one sketch
-sketches/      one .js file per sketch
+index.html                  the gallery page
+runner.html                 loads p5 and runs one sketch
+sketches/<name>/sketch.js   one folder per sketch
+.github/workflows/          lists the sketches and deploys the live site
 ```
 
 ## License

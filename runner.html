@@ -19,9 +19,14 @@
 </head>
 <body>
   <script>
-    // Load the sketch named in the URL hash, e.g. runner.html#sketches/foo.js
+    // Load the sketch folder named in the URL hash, e.g. runner.html#my-sketch.
+    // The base makes files in that folder (images, fonts) load by their plain name.
+    const base = document.createElement('base');
+    base.href = 'sketches/' + location.hash.slice(1) + '/';
+    document.head.appendChild(base);
+
     const s = document.createElement('script');
-    s.src = decodeURIComponent(location.hash.slice(1));
+    s.src = 'sketch.js';
     document.body.appendChild(s);
   </script>
 </body>

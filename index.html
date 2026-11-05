@@ -31,30 +31,44 @@
   <button class="nav" id="next" aria-label="Next">&#8594;</button>
 
   <script>
-    // Add new sketches here: { name, file }
-    const SKETCHES = [
-      { name: 'Self-avoiding path', file: 'sketches/self-avoiding-path.js' },
-      { name: 'Oscillating brush', file: 'sketches/oscillating-brush.js' },
-      { name: 'Spinning brush', file: 'sketches/spinning-brush.js' },
-      { name: 'Synthesizer', file: 'sketches/synthesizer.js' },
-      { name: 'Synthesizer 2', file: 'sketches/synthesizer-2.js' },
-    ];
+    // Every sketches/<folder>/sketch.js is a sketch; nothing to register here.
+    // Live site: sketches.json comes from the deploy workflow.
+    // Locally: read the folder listing from python's http.server.
+    async function loadSketches() {
+      const res = await fetch('sketches.json', { cache: 'no-store' });
+      if (res.ok) return res.json();
+      const html = await (await fetch('sketches/', { cache: 'no-store' })).text();
+      const links = new DOMParser().parseFromString(html, 'text/html').querySelectorAll('a');
+      return [...links]
+        .map(a => a.getAttribute('href'))
+        .filter(href => /^[^/.?][^/]*\/$/.test(href))
+        .map(href => decodeURIComponent(href.slice(0, -1)))
+        .sort();
+    }
+
+    // 'self-avoiding-path' -> 'Self avoiding path'
+    function displayName(folder) {
+      const words = folder.replace(/[-_]+/g, ' ');
+      return words.charAt(0).toUpperCase() + words.slice(1);
+    }
 
     const frame = document.getElementById('frame');
     const prev = document.getElementById('prev');
     const next = document.getElementById('next');
     const title = document.getElementById('title');
 
-    let i = Math.min(Math.max(parseInt(location.hash.slice(1)) || 0, 0), SKETCHES.length - 1);
+    let SKETCHES = [];
+    let i = 0;
 
     function show(n) {
       i = Math.min(Math.max(n, 0), SKETCHES.length - 1);
-      const s = SKETCHES[i];
+      const folder = SKETCHES[i];
+      const name = displayName(folder);
       // Fresh iframe per sketch so p5 globals never leak between sketches
-      frame.src = 'runner.html?' + Date.now() + '#' + encodeURIComponent(s.file);
-      title.textContent = s.name + '  ·  ' + (i + 1) + ' / ' + SKETCHES.length;
-      document.title = s.name;
-      history.replaceState(null, '', '#' + i);
+      frame.src = 'runner.html?' + Date.now() + '#' + encodeURIComponent(folder);
+      title.textContent = name + '  ·  ' + (i + 1) + ' / ' + SKETCHES.length;
+      document.title = name;
+      history.replaceState(null, '', '#' + encodeURIComponent(folder));
       prev.disabled = i === 0;
       next.disabled = i === SKETCHES.length - 1;
     }
@@ -66,7 +80,10 @@
       if (e.key === 'ArrowRight') show(i + 1);
     });
 
-    show(i);
+    loadSketches().then(list => {
+      SKETCHES = list;
+      show(Math.max(SKETCHES.indexOf(decodeURIComponent(location.hash.slice(1))), 0));
+    });
   </script>
 </body>
 </html>
