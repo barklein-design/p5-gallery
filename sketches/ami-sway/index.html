@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Starling murmuration · p5.js</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<header>Starling murmuration · 1 / 1</header>
+<div class="frame" id="canvas-holder"></div>
+<div class="controls">
+<div class="control"><label for="count">Bird Count:</label><input id="count" type="range" min="40" max="1000" step="20" value="180"><span class="number" id="count-value">180</span><button class="osc" data-control="count">Oscillator OFF</button></div>
+<div class="control"><label for="size">Bird Size:</label><input id="size" type="range" min="2" max="22" step="1" value="6"><span class="number" id="size-value">6</span><button class="osc" data-control="size">Oscillator OFF</button></div>
+<div class="control"><label for="cohesion">Cohesion:</label><input id="cohesion" type="range" min="0" max="100" value="65"><span class="number" id="cohesion-value">65</span><button class="osc" data-control="cohesion">Oscillator OFF</button></div>
+<div class="control"><label for="tone">Bird Tone:</label><input id="tone" type="range" min="0" max="100" value="18"><span class="number" id="tone-value">18</span><button class="osc" data-control="tone">Oscillator OFF</button></div>
+<div class="control"><label for="trail">Trail Opacity:</label><input id="trail" type="range" min="0" max="100" value="0"><span class="number" id="trail-value">0</span></div>
+<div class="buttons"><button id="pause">Pause</button><button id="clear">Clear / Restart</button></div>
+</div>
+<div class="note">Move the mouse through the flock to scatter it. Trail Opacity starts at 0. Trails fade gradually without slowing down the flock. Bird Tone shifts the whole flock between dark blue and dark brown.</div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"></script>
+<script src="sketch.js"></script>
+</body>
+</html>
