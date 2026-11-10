@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image Scanner</title>
+  <style>
+    :root {
+      --bg: #111418;
+      --panel: #1b2027;
+      --border: #3a4250;
+      --text: #e6e9ee;
+      --muted: #8a93a3;
+      --scan: #33ff99;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 24px 16px;
+    }
+    h1 { margin: 0; font-size: 20px; font-weight: 600; }
+
+    .stage {
+      position: relative;
+      width: min(900px, 100%);
+      min-height: 360px;
+      background: var(--panel);
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .stage.dragover { border-color: var(--scan); }
+    .stage.has-image { border-style: solid; min-height: 0; cursor: default; }
+
+    .placeholder { color: var(--muted); text-align: center; pointer-events: none; }
+    .stage.has-image .placeholder { display: none; }
+
+    .frame { position: relative; display: none; line-height: 0; }
+    .stage.has-image .frame { display: inline-block; }
+    .frame img { display: block; max-width: 100%; max-height: 75vh; }
+
+    .scan-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 2px;
+      background: var(--scan);
+      box-shadow: 0 0 8px var(--scan), 0 0 20px var(--scan);
+      transform: translateX(-1px);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .canvas-panel {
+      width: min(900px, 100%);
+      background: var(--panel);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      display: none;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .canvas-panel.ready { display: flex; }
+    .canvas-wrap { position: relative; line-height: 0; }
+    .paint {
+      display: block;
+      background: #000;
+      cursor: none;
+      touch-action: none;
+    }
+
+    .brush-cursor {
+      position: absolute;
+      border: 1px solid #fff;
+      mix-blend-mode: difference;
+      pointer-events: none;
+      display: none;
+      transform-origin: center;
+      z-index: 3;
+    }
+
+    .controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 14px; }
+    button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--scan); }
+    select {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 6px;
+      font: inherit;
+    }
+    .photo-strip {
+      width: min(900px, 100%);
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .slot {
+      position: relative;
+      flex: 0 0 auto;
+      width: 96px;
+      height: 72px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+      cursor: pointer;
+      padding: 0;
+    }
+    .slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .slot.active { border-color: var(--scan); }
+    .slot .num {
+      position: absolute; left: 4px; bottom: 3px;
+      font-size: 11px; color: #fff; text-shadow: 0 0 3px #000;
+    }
+    .slot .remove {
+      position: absolute; top: 2px; right: 2px;
+      width: 20px; height: 20px; line-height: 16px;
+      padding: 0; border-radius: 50%;
+      font-size: 14px;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+    }
+    .slot:hover .remove { display: block; }
+    .slot.add {
+      border-style: dashed;
+      color: var(--muted);
+      font-size: 28px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .slot.add:hover, .photo-strip.dragover .slot.add { border-color: var(--scan); color: var(--text); }
+    .controls .group-title { color: var(--text); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Image Scanner</h1>
+
+  <div class="canvas-panel" id="canvasPanel">
+    <div class="canvas-wrap">
+      <canvas class="paint" id="paint"></canvas>
+      <div class="brush-cursor" id="brushCursor"></div>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="placeholder">Drop images here, or click to choose files<br><small>Load several and press T to switch between them</small></div>
+    <div class="frame" id="frame">
+      <img id="image" alt="">
+      <div class="scan-line" id="scanLine"></div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+  </div>
+
+  <div class="photo-strip" id="photoStrip"></div>
+
+  <div class="controls">
+    <label>Scan duration
+      <input type="range" id="duration" min="0.5" max="10" step="0.5" value="3">
+      <span id="durationLabel">3s</span>
+    </label>
+    <label>Brush width
+      <input type="range" id="brushWidth" min="1" max="20" step="1" value="2">
+      <span id="brushWidthLabel">2px</span>
+    </label>
+    <label>Brush height
+      <input type="range" id="brushHeight" min="5" max="100" step="5" value="50">
+      <span id="brushHeightLabel">50%</span>
+    </label>
+    <label>Angle
+      <input type="range" id="brushAngle" min="-180" max="180" step="1" value="0">
+      <span id="brushAngleLabel">0°</span>
+    </label>
+    <button id="pauseBtn">Pause</button>
+    <button id="clearBtn">Clear</button>
+    <span id="photoLabel"></span>
+  </div>
+
+  <div class="controls">
+    <span class="group-title">Height oscillator</span>
+    <label><input type="checkbox" id="oscOn" checked> On</label>
+    <label>Wave
+      <select id="oscWave">
+        <option value="sine">Sine</option>
+        <option value="triangle">Triangle</option>
+        <option value="square">Square</option>
+        <option value="saw">Saw</option>
+      </select>
+    </label>
+    <label>Rate
+      <input type="range" id="oscRate" min="0.1" max="10" step="0.1" value="1">
+      <span id="oscRateLabel">1 Hz</span>
+    </label>
+    <label>Depth
+      <input type="range" id="oscDepth" min="0" max="100" step="5" value="80">
+      <span id="oscDepthLabel">80%</span>
+    </label>
+  </div>
+
+  <script>
+    const stage = document.getElementById('stage');
+    const frame = document.getElementById('frame');
+    const image = document.getElementById('image');
+    const scanLine = document.getElementById('scanLine');
+    const fileInput = document.getElementById('fileInput');
+    const durationInput = document.getElementById('duration');
+    const durationLabel = document.getElementById('durationLabel');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const photoStrip = document.getElementById('photoStrip');
+    const photoLabel = document.getElementById('photoLabel');
+
+    const paint = document.getElementById('paint');
+    const ctx = paint.getContext('2d');
+    const brushCursor = document.getElementById('brushCursor');
+    const brushWidthInput = document.getElementById('brushWidth');
+    const brushWidthLabel = document.getElementById('brushWidthLabel');
+    const brushHeightInput = document.getElementById('brushHeight');
+    const brushHeightLabel = document.getElementById('brushHeightLabel');
+    const canvasPanel = document.getElementById('canvasPanel');
+    const brushAngleInput = document.getElementById('brushAngle');
+    const brushAngleLabel = document.getElementById('brushAngleLabel');
+    const clearBtn = document.getElementById('clearBtn');
+    const oscOn = document.getElementById('oscOn');
+    const oscWave = document.getElementById('oscWave');
+    const oscRate = document.getElementById('oscRate');
+    const oscRateLabel = document.getElementById('oscRateLabel');
+    const oscDepth = document.getElementById('oscDepth');
+    const oscDepthLabel = document.getElementById('oscDepthLabel');
+
+    let progress = 0;          // 0..1 position across the image
+    let paused = false;
+    let lastTime = null;
+    let oscPhase = 0;          // 0..1 position in the oscillator cycle
+
+    // Loaded photos; the scanner shows one at a time and T switches between them.
+    // Each keeps its own decoded <img> so the brush can sample it immediately.
+    const photos = [];             // [{ url, img }]
+    let current = -1;
+    let source = null;             // decoded image the brush samples from
+    let paintBase = null;          // natural size of the first photo; fixes the canvas shape
+
+    function addFiles(files) {
+      const images = [...files].filter((f) => f.type.startsWith('image/'));
+      if (!images.length) return;
+      const first = photos.length;
+      let loaded = 0;
+      for (const file of images) {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        photos.push({ url: img.src, img });
+        img.onload = () => { if (++loaded === images.length) showPhoto(first); };
+      }
+    }
+
+    function showPhoto(i) {
+      if (!photos.length) {
+        current = -1;
+        source = null;
+        image.removeAttribute('src');
+        stage.classList.remove('has-image');
+        photoLabel.textContent = '';
+        renderStrip();
+        return;
+      }
+      current = (i + photos.length) % photos.length;
+      source = photos[current].img;
+      image.src = photos[current].url;
+      stage.classList.add('has-image');
+      canvasPanel.classList.add('ready');
+      if (!paintBase) {
+        paintBase = { w: source.naturalWidth, h: source.naturalHeight };
+        resizePaint(true);
+      }
+      photoLabel.textContent = photos.length > 1
+        ? `Photo ${current + 1}/${photos.length} — T / Shift+T to switch`
+        : '';
+      renderStrip();
+    }
+
+    function removePhoto(i) {
+      URL.revokeObjectURL(photos[i].url);
+      photos.splice(i, 1);
+      showPhoto(i < current ? current - 1 : Math.min(current, photos.length - 1));
+    }
+
+    // Thumbnail slots: click to select, × to remove, + to add more
+    function renderStrip() {
+      photoStrip.replaceChildren();
+      photos.forEach((photo, i) => {
+        const slot = document.createElement('div');
+        slot.className = 'slot' + (i === current ? ' active' : '');
+        slot.title = `Photo ${i + 1}`;
+        slot.innerHTML = `<img src="${photo.url}" alt=""><span class="num">${i + 1}</span>`;
+        slot.addEventListener('click', () => showPhoto(i));
+        const remove = document.createElement('button');
+        remove.className = 'remove';
+        remove.textContent = '×';
+        remove.title = 'Remove photo';
+        remove.addEventListener('click', (e) => { e.stopPropagation(); removePhoto(i); });
+        slot.append(remove);
+        photoStrip.append(slot);
+      });
+      const add = document.createElement('button');
+      add.className = 'slot add';
+      add.textContent = '+';
+      add.title = 'Add photos (you can pick several at once)';
+      add.addEventListener('click', () => fileInput.click());
+      photoStrip.append(add);
+    }
+    renderStrip();
+
+    photoStrip.addEventListener('dragover', (e) => { e.preventDefault(); photoStrip.classList.add('dragover'); });
+    photoStrip.addEventListener('dragleave', () => photoStrip.classList.remove('dragover'));
+    photoStrip.addEventListener('drop', (e) => {
+      e.preventDefault();
+      photoStrip.classList.remove('dragover');
+      addFiles(e.dataTransfer.files);
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() !== 't' || e.repeat) return;
+      showPhoto(current + (e.shiftKey ? -1 : 1));
+    });
+
+    // kept for the drop/file-picker paths and quick testing
+    function loadFile(file) { if (file) addFiles([file]); }
+
+    // Choosing / dropping an image
+    stage.addEventListener('click', () => {
+      if (!stage.classList.contains('has-image')) fileInput.click();
+    });
+    fileInput.addEventListener('change', () => {
+      addFiles(fileInput.files);
+      fileInput.value = '';          // allow picking the same files again
+    });
+
+    stage.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('dragover'); });
+    stage.addEventListener('dragleave', () => stage.classList.remove('dragover'));
+    stage.addEventListener('drop', (e) => {
+      e.preventDefault();
+      stage.classList.remove('dragover');
+      addFiles(e.dataTransfer.files);
+    });
+
+    // Controls
+    durationInput.addEventListener('input', () => {
+      durationLabel.textContent = durationInput.value + 's';
+    });
+    pauseBtn.addEventListener('click', () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+    });
+
+    // Painting canvas: a separate panel shaped like the first photo, fitted the
+    // same way the scanner image is (panel width, 75% of the window height)
+    function resizePaint(clear) {
+      if (!paintBase) return;
+      const dpr = window.devicePixelRatio || 1;
+      const aspect = paintBase.w / paintBase.h;
+      const cssW = Math.floor(Math.min(paintBase.w, canvasPanel.clientWidth, window.innerHeight * 0.75 * aspect));
+      const cssH = Math.round(cssW / aspect);
+      paint.style.width = cssW + 'px';
+      paint.style.height = cssH + 'px';
+      const w = Math.round(cssW * dpr);
+      const h = Math.round(cssH * dpr);
+      if (w === paint.width && h === paint.height && !clear) return;
+      let old = null;
+      if (!clear && paint.width && paint.height) {
+        old = document.createElement('canvas');
+        old.width = paint.width; old.height = paint.height;
+        old.getContext('2d').drawImage(paint, 0, 0);
+      }
+      paint.width = w; paint.height = h;
+      ctx.imageSmoothingEnabled = false;
+      if (old) ctx.drawImage(old, 0, 0, w, h);
+    }
+    window.addEventListener('resize', () => resizePaint(false));
+
+    // Oscillator output in -1..1 for the current phase
+    function oscValue() {
+      const t = oscPhase;
+      switch (oscWave.value) {
+        case 'triangle': return 1 - 4 * Math.abs(t - 0.5);
+        case 'square': return t < 0.5 ? 1 : -1;
+        case 'saw': return 2 * t - 1;
+        default: return Math.sin(2 * Math.PI * t);
+      }
+    }
+
+    function brushSize() {
+      const base = paint.clientHeight * parseInt(brushHeightInput.value, 10) / 100;
+      let h = base;
+      if (oscOn.checked) {
+        h = base * (1 + (parseInt(oscDepth.value, 10) / 100) * oscValue());
+      }
+      return {
+        w: parseInt(brushWidthInput.value, 10),
+        h: Math.min(paint.clientHeight, Math.max(1, h)),
+      };
+    }
+
+    // Stamp the image column under the scan line at (x, y) in CSS pixels
+    function stamp(x, y, h, angle) {
+      const dpr = paint.width / paint.clientWidth;
+      const { w } = brushSize();
+      if (!source) return;
+      const sx = Math.min(Math.floor(progress * source.naturalWidth), source.naturalWidth - 1);
+      ctx.save();
+      ctx.translate(x * dpr, y * dpr);
+      ctx.rotate(angle * Math.PI / 180);
+      ctx.drawImage(source,
+        sx, 0, 1, source.naturalHeight,
+        -w / 2 * dpr, -h / 2 * dpr, w * dpr, h * dpr);
+      ctx.restore();
+    }
+
+    // Brush angle in degrees, kept in -180..180
+    let brushAngle = 0;
+    function setAngle(deg) {
+      brushAngle = ((deg + 180) % 360 + 360) % 360 - 180;
+      brushAngleInput.value = Math.round(brushAngle);
+      brushAngleLabel.textContent = Math.round(brushAngle) + '°';
+    }
+    brushAngleInput.addEventListener('input', () => setAngle(parseFloat(brushAngleInput.value)));
+
+    let drawing = false;
+    let lastPoint = null;
+    let cursorPoint = null;    // last pointer position over the canvas
+
+    function pointerPos(e) {
+      const r = paint.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    function moveCursor(p) {
+      cursorPoint = p;
+      const { w, h } = brushSize();
+      brushCursor.style.display = 'block';
+      brushCursor.style.left = (p.x - w / 2) + 'px';
+      brushCursor.style.top = (p.y - h / 2) + 'px';
+      brushCursor.style.width = w + 'px';
+      brushCursor.style.height = h + 'px';
+      brushCursor.style.transform = `rotate(${brushAngle}deg)`;
+    }
+
+    // Touch: the left finger paints, a second finger to its right is an angle
+    // control — dragging it up/down turns the brush while the left keeps painting.
+    const ANGLE_PER_PX = 1;        // degrees of rotation per pixel of control-finger drag
+    const touches = new Map();     // pointerId -> {x, y}
+    let paintId = null;            // pointer that paints
+    let control = null;            // {id, startY, startAngle} for the angle finger
+
+    function capture(e) {
+      try { paint.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    }
+
+    function beginStroke(p) {
+      drawing = true;
+      lastPoint = { x: p.x, y: p.y, h: brushSize().h, a: brushAngle };
+      stamp(lastPoint.x, lastPoint.y, lastPoint.h, lastPoint.a);
+    }
+
+    function continueStroke(p) {
+      // Fill the gap between pointer events so fast strokes stay continuous,
+      // blending the (oscillating) height and the angle so edges stay smooth
+      const next = { x: p.x, y: p.y, h: brushSize().h, a: brushAngle };
+      const dx = next.x - lastPoint.x, dy = next.y - lastPoint.y;
+      const dh = next.h - lastPoint.h;
+      const da = ((next.a - lastPoint.a + 540) % 360) - 180;   // shortest way round
+      // enough stamps for both the move and the sweep of the brush tips when turning
+      const tipTravel = Math.abs(da) * Math.PI / 180 * Math.max(lastPoint.h, next.h) / 2;
+      const steps = Math.max(1, Math.ceil(Math.max(Math.hypot(dx, dy), tipTravel)));
+      for (let i = 1; i <= steps; i++) {
+        const k = i / steps;
+        stamp(lastPoint.x + dx * k, lastPoint.y + dy * k, lastPoint.h + dh * k, lastPoint.a + da * k);
+      }
+      lastPoint = next;
+    }
+
+    // Spin mode (hold S): pointer movement turns the brush instead of moving it,
+    // so you can keep painting while spinning in place. When S is released the
+    // stroke carries on from where the brush is (the brush keeps an offset from
+    // the hidden pointer until the stroke ends).
+    const SPIN_PER_PX = 1;         // degrees per pixel of horizontal movement
+    let spinning = false;
+    let lastRaw = null;            // last raw pointer position
+    let offset = { x: 0, y: 0 };   // brush position = pointer + offset
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 's') spinning = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key.toLowerCase() === 's') spinning = false;
+    });
+    window.addEventListener('blur', () => { spinning = false; });
+
+    paint.addEventListener('pointerdown', (e) => {
+      const raw = pointerPos(e);
+      const p = e.pointerType === 'touch' ? raw : { x: raw.x + offset.x, y: raw.y + offset.y };
+      lastRaw = raw;
+      capture(e);
+      if (e.pointerType === 'touch') {
+        touches.set(e.pointerId, p);
+        if (paintId !== null && control === null) {
+          // Second finger: whichever is further right becomes the angle control
+          const painter = touches.get(paintId);
+          if (p.x >= painter.x) {
+            control = { id: e.pointerId, startY: p.y, startAngle: brushAngle };
+          } else {
+            control = { id: paintId, startY: painter.y, startAngle: brushAngle };
+            paintId = e.pointerId;
+            beginStroke(p);
+          }
+          return;
+        }
+        if (paintId !== null) return;   // ignore third+ fingers
+        paintId = e.pointerId;
+      }
+      beginStroke(p);
+    });
+
+    paint.addEventListener('pointermove', (e) => {
+      const p = pointerPos(e);
+      if (touches.has(e.pointerId)) {
+        touches.set(e.pointerId, p);
+        if (control && e.pointerId === control.id) {
+          setAngle(control.startAngle + (p.y - control.startY) * ANGLE_PER_PX);
+          if (cursorPoint) moveCursor(cursorPoint);
+          return;
+        }
+        if (e.pointerId !== paintId) return;
+      }
+      if (spinning && cursorPoint) {
+        if (lastRaw) setAngle(brushAngle + (p.x - lastRaw.x) * SPIN_PER_PX);
+        offset = { x: cursorPoint.x - p.x, y: cursorPoint.y - p.y };   // brush stays put
+      } else if (!drawing) {
+        offset = { x: 0, y: 0 };      // hovering: brush follows the pointer again
+      }
+      lastRaw = p;
+      const b = { x: p.x + offset.x, y: p.y + offset.y };
+      moveCursor(b);
+      if (drawing) continueStroke(b);
+    });
+
+    const endPointer = (e) => {
+      touches.delete(e.pointerId);
+      if (control && e.pointerId === control.id) {
+        control = null;                 // painting finger keeps going
+        return;
+      }
+      if (e.pointerType === 'touch' && e.pointerId !== paintId) return;
+      drawing = false;
+      lastPoint = null;
+      paintId = null;
+      control = null;
+    };
+    paint.addEventListener('pointerup', endPointer);
+    paint.addEventListener('pointercancel', endPointer);
+    paint.addEventListener('pointerleave', () => {
+      brushCursor.style.display = 'none';
+      cursorPoint = null;
+      lastRaw = null;
+    });
+
+    // Safari trackpad rotate gesture (macOS). Skipped while touch pointers are
+    // active, since iOS Safari also fires these alongside the touch handling above.
+    let gestureStartAngle = 0;
+    paint.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+      gestureStartAngle = brushAngle;
+    });
+    paint.addEventListener('gesturechange', (e) => {
+      e.preventDefault();
+      if (touches.size === 0) setAngle(gestureStartAngle + e.rotation);
+    });
+
+    // Two-finger trackpad scroll (Chrome/Firefox don't expose rotate gestures).
+    // ctrlKey means pinch-zoom, which is left alone.
+    paint.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) return;
+      e.preventDefault();
+      setAngle(brushAngle + (e.deltaX + e.deltaY) * 0.25);
+      if (cursorPoint) moveCursor(cursorPoint);
+    }, { passive: false });
+
+    // Keyboard rotation, usable while painting on a trackpad: hold A / ← to turn
+    // counterclockwise, D / → to turn clockwise (Shift = faster)
+    const ROTATE_SPEED = 90;        // degrees per second
+    const heldKeys = new Set();
+    const ROTATE_KEYS = { a: -1, arrowleft: -1, d: 1, arrowright: 1 };
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (!(key in ROTATE_KEYS)) return;
+      e.preventDefault();             // keep arrows from moving a focused slider
+      heldKeys.add(key);
+    });
+    window.addEventListener('keyup', (e) => heldKeys.delete(e.key.toLowerCase()));
+    window.addEventListener('blur', () => heldKeys.clear());
+    let rotateFast = false;
+    window.addEventListener('keydown', (e) => { rotateFast = e.shiftKey; });
+    window.addEventListener('keyup', (e) => { rotateFast = e.shiftKey; });
+
+    function keyRotation(dt) {
+      let dir = 0;
+      for (const k of heldKeys) dir += ROTATE_KEYS[k];
+      if (!dir) return;
+      setAngle(brushAngle + Math.sign(dir) * ROTATE_SPEED * (rotateFast ? 3 : 1) * dt);
+      if (cursorPoint) moveCursor(cursorPoint);
+      if (drawing) continueStroke(lastPoint);   // turning in place paints a fan
+    }
+
+    brushWidthInput.addEventListener('input', () => {
+      brushWidthLabel.textContent = brushWidthInput.value + 'px';
+    });
+    brushHeightInput.addEventListener('input', () => {
+      brushHeightLabel.textContent = brushHeightInput.value + '%';
+    });
+    oscRate.addEventListener('input', () => {
+      oscRateLabel.textContent = oscRate.value + ' Hz';
+    });
+    oscDepth.addEventListener('input', () => {
+      oscDepthLabel.textContent = oscDepth.value + '%';
+    });
+    clearBtn.addEventListener('click', () => ctx.clearRect(0, 0, paint.width, paint.height));
+
+    // Animation loop: scan moves left → right and wraps; oscillator runs freely
+    function tick(time) {
+      if (lastTime !== null) {
+        // capped so a throttled/background tab doesn't jump when it resumes
+        const dt = Math.min((time - lastTime) / 1000, 0.1);
+        if (!paused) progress = (progress + dt / parseFloat(durationInput.value)) % 1;
+        oscPhase = (oscPhase + dt * parseFloat(oscRate.value)) % 1;
+        keyRotation(dt);
+      }
+      lastTime = time;
+      scanLine.style.left = (progress * frame.clientWidth) + 'px';
+      if (cursorPoint) moveCursor(cursorPoint);   // keep the brush outline in sync with the oscillator
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>

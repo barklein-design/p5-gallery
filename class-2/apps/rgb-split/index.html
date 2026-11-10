@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RGB Split</title>
+<style>
+  :root { --bg:#111; --panel:#1b1b1b; --line:#2c2c2c; --fg:#eee; --mute:#888; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui, sans-serif; display:flex; height:100vh; }
+  aside { width:280px; flex:none; background:var(--panel); border-right:1px solid var(--line); padding:16px; overflow:auto; }
+  main { flex:1; display:flex; align-items:center; justify-content:center; overflow:auto; position:relative; }
+  h1 { font-size:18px; margin:0 0 12px; letter-spacing:.5px; }
+  h1 span:nth-child(1){color:#f44} h1 span:nth-child(2){color:#4f4} h1 span:nth-child(3){color:#48f}
+  button, select { background:#262626; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color:#555; }
+  .row { display:flex; gap:8px; margin:8px 0; flex-wrap:wrap; }
+  .ch { border:1px solid var(--line); border-radius:8px; padding:10px; margin:10px 0; cursor:pointer; }
+  .ch.active { border-color:var(--c); box-shadow:0 0 0 1px var(--c) inset; }
+  .ch header { display:flex; justify-content:space-between; align-items:center; font-weight:600; color:var(--c); }
+  .ch label { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--mute); margin-top:6px; }
+  .ch input[type=range] { flex:1; accent-color:var(--c); }
+  .ch output { width:38px; text-align:right; color:var(--fg); font-variant-numeric:tabular-nums; }
+  .pad { display:grid; grid-template-columns:repeat(3,32px); gap:4px; justify-content:center; margin-top:8px; }
+  .pad button { padding:4px 0; }
+  .hint { color:var(--mute); font-size:12px; margin-top:12px; }
+  kbd { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:4px; padding:0 4px; font-size:11px; }
+  canvas { max-width:100%; max-height:100%; image-rendering:auto; cursor:grab; display:none; }
+  canvas.dragging { cursor:grabbing; }
+  #drop { text-align:center; color:var(--mute); border:2px dashed #333; border-radius:12px; padding:48px; }
+  main.over #drop { border-color:#888; color:#ccc; }
+  @media (max-width:700px){ body{flex-direction:column;height:auto} aside{width:auto;border-right:0;border-bottom:1px solid var(--line)} main{min-height:60vh;padding:16px} }
+</style>
+</head>
+<body>
+<aside>
+  <h1><span>R</span><span>G</span><span>B</span> Split</h1>
+  <div class="row">
+    <button id="open">Open image…</button>
+    <input id="file" type="file" accept="image/*" hidden>
+    <button id="save">Save PNG</button>
+  </div>
+  <div class="row">
+    <button id="reset">Reset all</button>
+    <button id="random">Randomize</button>
+  </div>
+  <label class="row" style="align-items:center;gap:6px;color:var(--mute);font-size:12px">
+    Edges <select id="edge"><option value="wrap">Wrap around</option><option value="clip">Clip (black)</option></select>
+  </label>
+  <div class="ch" style="--c:#ccc;cursor:default">
+    <header><span>Derivative</span></header>
+    <label>Horiz d/dx <input type="range" id="dx" min="0" max="2" step="1" value="0"><output id="dxOut">off</output></label>
+    <label>Vert d/dy <input type="range" id="dy" min="0" max="2" step="1" value="0"><output id="dyOut">off</output></label>
+    <label>Gain <input type="range" id="gain" min="1" max="20" step="0.5" value="4"><output id="gainOut">4</output></label>
+    <label style="margin-top:8px"><input type="checkbox" id="signed"> Signed (gray = 0)</label>
+    <div style="font-size:11px;color:var(--mute);margin-top:4px">0 = off, 1 = 1st, 2 = 2nd derivative. Both on = mixed derivative.</div>
+  </div>
+  <div class="ch" style="--c:#ccc;cursor:default">
+    <header><span>Threshold</span></header>
+    <label>Mean RGB &gt; <input type="range" id="thresh" min="0" max="255" value="255"><output id="threshOut">255</output></label>
+    <div style="font-size:11px;color:var(--mute);margin-top:4px">Pixels brighter than this become black (255 = off)</div>
+  </div>
+  <div id="channels"></div>
+  <div class="hint">
+    Click a channel to select it, then:<br>
+    • Drag on the image<br>
+    • <kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> move 1px (<kbd>Shift</kbd> = 10px)<br>
+    • <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> select R / G / B<br>
+    • <kbd>A</kbd> select all, <kbd>0</kbd> reset selected<br>
+    Drop or paste an image anywhere.
+  </div>
+</aside>
+<main id="stage">
+  <div id="drop">Drop an image here, paste it, or click <b>Open image…</b></div>
+  <canvas id="view"></canvas>
+</main>
+
+<script>
+const CH = [
+  { name:'Red',   color:'#ff4d4d', mask:[1,0,0] },
+  { name:'Green', color:'#4dff6a', mask:[0,1,0] },
+  { name:'Blue',  color:'#4d8bff', mask:[0,0,1] },
+];
+const state = { x:[0,0,0], y:[0,0,0], on:[true,true,true], sel:new Set([0]) };
+const MAX_SIDE = 2400, RANGE = 300;
+let W = 0, H = 0, layers = [];
+const view = document.getElementById('view'), ctx = view.getContext('2d');
+const stage = document.getElementById('stage'), drop = document.getElementById('drop');
+
+// ---------- UI ----------
+const chWrap = document.getElementById('channels');
+CH.forEach((c, i) => {
+  const el = document.createElement('div');
+  el.className = 'ch'; el.style.setProperty('--c', c.color); el.dataset.i = i;
+  el.innerHTML = `
+    <header><span>${c.name}</span><label style="margin:0"><input type="checkbox" checked data-k="on"> show</label></header>
+    <label>X <input type="range" min="-${RANGE}" max="${RANGE}" value="0" data-k="x"><output>0</output></label>
+    <label>Y <input type="range" min="-${RANGE}" max="${RANGE}" value="0" data-k="y"><output>0</output></label>
+    <div class="pad">
+      <span></span><button data-d="0,-1">↑</button><span></span>
+      <button data-d="-1,0">←</button><button data-d="0,0">•</button><button data-d="1,0">→</button>
+      <span></span><button data-d="0,1">↓</button><span></span>
+    </div>`;
+  el.addEventListener('click', e => {
+    if (e.target.closest('input,button')) { if (!e.shiftKey) selectOnly(i); return; }
+    if (e.shiftKey) { state.sel.has(i) && state.sel.size > 1 ? state.sel.delete(i) : state.sel.add(i); }
+    else selectOnly(i);
+    syncUI();
+  });
+  el.querySelectorAll('input[type=range]').forEach(r => r.addEventListener('input', () => {
+    state[r.dataset.k][i] = +r.value; syncUI(); render();
+  }));
+  el.querySelector('[data-k=on]').addEventListener('change', e => { state.on[i] = e.target.checked; render(); });
+  el.querySelectorAll('.pad button').forEach(b => b.addEventListener('click', e => {
+    const [dx, dy] = b.dataset.d.split(',').map(Number);
+    const step = e.shiftKey ? 10 : 1;
+    if (!dx && !dy) { state.x[i] = 0; state.y[i] = 0; }
+    else { state.x[i] += dx*step; state.y[i] += dy*step; }
+    syncUI(); render();
+  }));
+  chWrap.appendChild(el);
+});
+function selectOnly(i){ state.sel = new Set([i]); syncUI(); }
+function syncUI(){
+  chWrap.querySelectorAll('.ch').forEach((el, i) => {
+    el.classList.toggle('active', state.sel.has(i));
+    ['x','y'].forEach(k => {
+      const r = el.querySelector(`[data-k=${k}]`);
+      r.value = state[k][i]; r.nextElementSibling.textContent = state[k][i];
+    });
+  });
+}
+
+// ---------- Loading ----------
+const fileInput = document.getElementById('file');
+document.getElementById('open').onclick = () => fileInput.click();
+fileInput.onchange = () => fileInput.files[0] && loadFile(fileInput.files[0]);
+['dragenter','dragover'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); stage.classList.add('over'); }));
+['dragleave','drop'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); stage.classList.remove('over'); }));
+document.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; f && f.type.startsWith('image/') && loadFile(f); });
+document.addEventListener('paste', e => {
+  const item = [...e.clipboardData.items].find(it => it.type.startsWith('image/'));
+  item && loadFile(item.getAsFile());
+});
+
+function loadFile(file){
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => { URL.revokeObjectURL(url); setImage(img); };
+  img.src = url;
+}
+
+function setImage(img){
+  const s = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+  W = Math.round(img.naturalWidth * s); H = Math.round(img.naturalHeight * s);
+  const src = document.createElement('canvas'); src.width = W; src.height = H;
+  const sctx = src.getContext('2d'); sctx.drawImage(img, 0, 0, W, H);
+  srcData = sctx.getImageData(0, 0, W, H).data;
+  layers = CH.map(() => { const cv = document.createElement('canvas'); cv.width = W; cv.height = H; return cv; });
+  view.width = W; view.height = H;
+  view.style.display = 'block'; drop.style.display = 'none';
+  buildLayers();
+}
+
+// Derivative kernels (central differences): order 0 = none, 1 = first, 2 = second.
+const KERNELS = { 1:[-0.5, 0, 0.5], 2:[1, -2, 1] };
+const ORDER_LABEL = ['off', '1st', '2nd'];
+const dxEl = document.getElementById('dx'), dyEl = document.getElementById('dy');
+const gainEl = document.getElementById('gain'), signedEl = document.getElementById('signed');
+
+// Convolve float RGB buffer along one axis with a 3-tap kernel (edges clamped).
+function conv1d(f, k, horizontal){
+  const out = new Float32Array(f.length);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y*W + x) * 3;
+      let a, b;
+      if (horizontal) { a = (y*W + Math.max(x-1, 0)) * 3; b = (y*W + Math.min(x+1, W-1)) * 3; }
+      else            { a = (Math.max(y-1, 0)*W + x) * 3; b = (Math.min(y+1, H-1)*W + x) * 3; }
+      out[i]   = k[0]*f[a]   + k[1]*f[i]   + k[2]*f[b];
+      out[i+1] = k[0]*f[a+1] + k[1]*f[i+1] + k[2]*f[b+1];
+      out[i+2] = k[0]*f[a+2] + k[1]*f[i+2] + k[2]*f[b+2];
+    }
+  }
+  return out;
+}
+
+// Returns RGBA bytes: the source, or its derivative if any order > 0.
+function processed(){
+  const ox = +dxEl.value, oy = +dyEl.value;
+  if (!ox && !oy) return srcData;
+  let f = new Float32Array(W*H*3);
+  for (let p = 0, i = 0; p < srcData.length; p += 4, i += 3) { f[i] = srcData[p]; f[i+1] = srcData[p+1]; f[i+2] = srcData[p+2]; }
+  if (ox) f = conv1d(f, KERNELS[ox], true);
+  if (oy) f = conv1d(f, KERNELS[oy], false);
+  const gain = +gainEl.value, signed = signedEl.checked;
+  const out = new Uint8ClampedArray(srcData.length);
+  for (let p = 0, i = 0; p < out.length; p += 4, i += 3) {
+    for (let c = 0; c < 3; c++) out[p+c] = signed ? 128 + f[i+c]*gain/2 : Math.abs(f[i+c])*gain;
+    out[p+3] = 255;
+  }
+  return out;
+}
+
+// Split (processed) source into R/G/B layers; pixels whose mean RGB > threshold become black.
+let srcData = null;
+const threshEl = document.getElementById('thresh'), threshOut = document.getElementById('threshOut');
+function buildLayers(){
+  if (!srcData) return;
+  const t = +threshEl.value * 3, d = processed();
+  const ctxs = layers.map(cv => cv.getContext('2d'));
+  const outs = ctxs.map(cx => cx.createImageData(W, H));
+  const [r, g, b] = outs.map(o => o.data);
+  for (let p = 0; p < d.length; p += 4) {
+    const keep = d[p] + d[p+1] + d[p+2] <= t;
+    r[p]   = keep ? d[p]   : 0; r[p+3] = 255;
+    g[p+1] = keep ? d[p+1] : 0; g[p+3] = 255;
+    b[p+2] = keep ? d[p+2] : 0; b[p+3] = 255;
+  }
+  ctxs.forEach((cx, i) => cx.putImageData(outs[i], 0, 0));
+  render();
+}
+let buildRaf = 0;
+function scheduleBuild(){
+  threshOut.textContent = threshEl.value;
+  document.getElementById('dxOut').textContent = ORDER_LABEL[dxEl.value];
+  document.getElementById('dyOut').textContent = ORDER_LABEL[dyEl.value];
+  document.getElementById('gainOut').textContent = gainEl.value;
+  cancelAnimationFrame(buildRaf); buildRaf = requestAnimationFrame(buildLayers);
+}
+[threshEl, dxEl, dyEl, gainEl, signedEl].forEach(el => el.addEventListener('input', scheduleBuild));
+
+// ---------- Render ----------
+const edgeSel = document.getElementById('edge');
+edgeSel.onchange = render;
+function render(){
+  if (!layers.length) return;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'lighter';   // additive: R+G+B = original
+  const wrap = edgeSel.value === 'wrap';
+  layers.forEach((cv, i) => {
+    if (!state.on[i]) return;
+    let x = state.x[i], y = state.y[i];
+    if (!wrap) { ctx.drawImage(cv, x, y); return; }
+    x = ((x % W) + W) % W; y = ((y % H) + H) % H;
+    for (const ox of [x, x - W]) for (const oy of [y, y - H]) ctx.drawImage(cv, ox, oy);
+  });
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+// ---------- Interaction ----------
+function nudge(dx, dy){ state.sel.forEach(i => { state.x[i] += dx; state.y[i] += dy; }); syncUI(); render(); }
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || [threshEl, dxEl, dyEl, gainEl].includes(e.target)) return;
+  const step = e.shiftKey ? 10 : 1;
+  const map = { ArrowLeft:[-step,0], ArrowRight:[step,0], ArrowUp:[0,-step], ArrowDown:[0,step] };
+  if (map[e.key]) { e.preventDefault(); nudge(...map[e.key]); return; }
+  if ('123'.includes(e.key) && e.key) { selectOnly(+e.key - 1); return; }
+  if (e.key === 'a' || e.key === 'A') { state.sel = new Set([0,1,2]); syncUI(); return; }
+  if (e.key === '0') { state.sel.forEach(i => { state.x[i] = 0; state.y[i] = 0; }); syncUI(); render(); }
+});
+
+let drag = null;
+view.addEventListener('pointerdown', e => {
+  view.setPointerCapture(e.pointerId); view.classList.add('dragging');
+  const scale = W / view.getBoundingClientRect().width;
+  drag = { sx:e.clientX, sy:e.clientY, scale, start:[...state.sel].map(i => [i, state.x[i], state.y[i]]) };
+});
+view.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = Math.round((e.clientX - drag.sx) * drag.scale), dy = Math.round((e.clientY - drag.sy) * drag.scale);
+  drag.start.forEach(([i, x, y]) => { state.x[i] = x + dx; state.y[i] = y + dy; });
+  syncUI(); render();
+});
+['pointerup','pointercancel'].forEach(t => view.addEventListener(t, () => { drag = null; view.classList.remove('dragging'); }));
+
+document.getElementById('reset').onclick = () => { state.x = [0,0,0]; state.y = [0,0,0]; syncUI(); render(); };
+document.getElementById('random').onclick = () => {
+  const r = () => Math.round((Math.random() - .5) * 60);
+  state.x = [r(), r(), r()]; state.y = [r(), r(), r()]; syncUI(); render();
+};
+document.getElementById('save').onclick = () => {
+  if (!layers.length) return;
+  view.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'rgb-split.png'; a.click(); });
+};
+
+syncUI();
+</script>
+</body>
+</html>

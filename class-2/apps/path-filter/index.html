@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<title>Labyrinth Ink</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working screen — plotter bed (canvas) left, instrument panel right; stacks on phones. */
+:root {
+  --bg: #e9ecef;
+  --panel: #fbfcfd;
+  --fg: #15181e;
+  --muted: #5b6370;
+  --line: #d3d8df;
+  --accent: #2a47d6;
+  --accent-ink: #ffffff;
+  --stage: #dde1e6;
+  --display: "Syne", "Avenir Next", system-ui, sans-serif;
+  --body: "Instrument Sans", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111318; --panel: #181b21; --fg: #e6e8ee; --muted: #98a0ad; --line: #2a2f39;
+    --accent: #7f95ff; --accent-ink: #0d1020; --stage: #0c0e12; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111318; --panel: #181b21; --fg: #e6e8ee; --muted: #98a0ad; --line: #2a2f39;
+  --accent: #7f95ff; --accent-ink: #0d1020; --stage: #0c0e12; color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 20px; box-sizing: border-box;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: 26px; letter-spacing: -0.01em; margin: 0; }
+header p { margin: 0; color: var(--muted); max-width: 62ch; text-wrap: balance; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .app { grid-template-columns: minmax(0, 1fr); } }
+.stage {
+  background: var(--stage); border-radius: 6px; min-height: 320px; display: grid; place-items: center;
+  padding: 14px; position: relative; min-width: 0;
+}
+.stage.drag { outline: 2px dashed var(--accent); outline-offset: -8px; }
+canvas#out { display: block; max-width: 100%; max-height: calc(100vh - 150px); width: auto; height: auto;
+  box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 8px 30px rgba(0,0,0,.10); }
+.hud { position: absolute; left: 14px; bottom: 10px; right: 14px; display: flex; justify-content: space-between; gap: 10px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted); pointer-events: none; flex-wrap: wrap; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.group { display: flex; flex-direction: column; gap: 10px; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 600; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+button, .filebtn {
+  font: 500 13px var(--body); color: var(--fg); background: transparent; border: 1px solid var(--line);
+  border-radius: 4px; padding: 7px 11px; cursor: pointer;
+}
+button:hover, .filebtn:hover { border-color: var(--muted); }
+button:focus-visible, .filebtn:focus-within, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.filebtn { position: relative; }
+.styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
+.styles button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 6px; font-size: 12px; }
+.styles button svg { width: 40px; height: 28px; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.styles button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ctl { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+.ctl label { font-size: 13px; }
+.ctl output { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ctl input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 2px 0 0; }
+.colors { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.colors label, .check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+input[type=color] { width: 34px; height: 26px; border: 1px solid var(--line); border-radius: 4px; padding: 1px; background: transparent; }
+select { font: 13px var(--body); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px; }
+video#vout { display: block; max-width: 100%; max-height: calc(100vh - 150px); }
+progress { width: 100%; accent-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 4px; font-size: 13px; }
+</style>
+
+<header>
+  <h1>Labyrinth Ink</h1>
+  <p>Redraws a photo as one unbroken line that never crosses itself. The line packs tighter in shadows and opens up in highlights.</p>
+</header>
+
+<div class="app">
+  <div class="stage" id="stage">
+    <canvas id="out" width="1200" height="800" aria-label="Line drawing output"></canvas>
+    <video id="vout" controls loop playsinline muted hidden></video>
+    <div class="hud"><span id="stat">Starting…</span><span id="hint2">Drop or paste a photo anywhere</span></div>
+  </div>
+
+  <aside class="panel">
+    <div class="group">
+      <span class="label">Photo</span>
+      <div class="row">
+        <label class="filebtn">Choose photo or video<input id="file" type="file" accept="image/*,video/*"></label>
+        <button id="demo" type="button">Sample scene</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="label">Path style</span>
+      <div class="styles" id="styles">
+        <button type="button" data-style="manhattan" aria-pressed="true"><svg viewBox="0 0 40 28"><path d="M4 24V14h8v10h8V4H8M28 4v20h8V4"/></svg>Manhattan</button>
+        <button type="button" data-style="rounded" aria-pressed="false"><svg viewBox="0 0 40 28"><path d="M4 24v-6q0-4 4-4t4 4v2q0 4 4 4t4-4V8q0-4-4-4H8M28 4v16q0 4 4 4t4-4V4"/></svg>Rounded</button>
+        <button type="button" data-style="smooth" aria-pressed="false"><svg viewBox="0 0 40 28"><path d="M4 24C4 10 12 10 12 18s8 8 8-4S12 2 8 6M28 4c0 30 8 30 8 0"/></svg>Smooth</button>
+        <button type="button" data-style="organic" aria-pressed="false"><svg viewBox="0 0 40 28"><path d="M4 22c4-14 10 4 14-6s-8-12-2-12 10 6 6 12 10 8 12 2-6-10 2-14"/></svg>Organic</button>
+        <button type="button" data-style="coral" aria-pressed="false"><svg viewBox="0 0 40 28"><path d="M20 14c-3-2 0-6 3-4s2 7-3 7-8-5-5-10 11-4 12 2 -2 12-9 11-12-6-10-12"/></svg>Coral</button>
+      </div>
+      <p class="hint" id="styleHint">Hilbert-curve walk on a grid that subdivides where the photo is dark.</p>
+    </div>
+
+    <div class="group">
+      <span class="label">Density</span>
+      <div class="ctl"><label for="sMin">Spacing in shadows</label><output id="sMinO"></output><input id="sMin" type="range" min="1.5" max="20" step="0.5" value="4"></div>
+      <div class="ctl"><label for="sMax">Spacing in highlights</label><output id="sMaxO"></output><input id="sMax" type="range" min="6" max="90" step="1" value="34"></div>
+      <div class="ctl"><label for="gamma">Tone curve</label><output id="gammaO"></output><input id="gamma" type="range" min="0.3" max="3" step="0.05" value="1"></div>
+      <div class="ctl"><label for="contrast">Contrast</label><output id="contrastO"></output><input id="contrast" type="range" min="0.5" max="3" step="0.05" value="1.3"></div>
+      <div class="ctl"><label for="bright">Brightness</label><output id="brightO"></output><input id="bright" type="range" min="-0.5" max="0.5" step="0.01" value="0"></div>
+      <div class="ctl"><label for="detail">Detail</label><output id="detailO"></output><input id="detail" type="range" min="0" max="1" step="0.05" value="0.5"></div>
+      <div class="ctl" id="jitterCtl"><label for="jitter">Dither</label><output id="jitterO"></output><input id="jitter" type="range" min="0" max="1" step="0.05" value="0.35"></div>
+      <div class="ctl" id="roundCtl" hidden><label for="round">Roundness</label><output id="roundO"></output><input id="round" type="range" min="0.1" max="1" step="0.05" value="1"></div>
+    </div>
+
+    <div class="group">
+      <span class="label">Ink</span>
+      <div class="ctl"><label for="lw">Line width (px)</label><output id="lwO"></output><input id="lw" type="range" min="0.3" max="4" step="0.1" value="1.1"></div>
+      <div class="colors">
+        <label><input id="ink" type="color" value="#14161c">Ink</label>
+        <label><input id="paper" type="color" value="#f7f7f4">Paper</label>
+      </div>
+      <label class="check"><input id="invert" type="checkbox">Invert (dense in highlights)</label>
+      <div class="ctl"><label for="photo">Photo underlay</label><output id="photoO"></output><input id="photo" type="range" min="0" max="1" step="0.05" value="0"></div>
+    </div>
+
+    <div class="group" id="videoGroup" hidden>
+      <span class="label">Video</span>
+      <p class="hint" id="vinfo"></p>
+      <div class="ctl"><label for="vstart">Start at (s)</label><output id="vstartO"></output><input id="vstart" type="range" min="0" max="10" step="0.5" value="0"></div>
+      <div class="ctl"><label for="vlen">Length (s)</label><output id="vlenO"></output><input id="vlen" type="range" min="1" max="60" step="1" value="8"></div>
+      <div class="ctl" id="vstepsCtl" hidden><label for="vsteps">Settling per frame</label><output id="vstepsO"></output><input id="vsteps" type="range" min="2" max="40" step="1" value="10"></div>
+      <div class="ctl"><label for="vblend">Flicker smoothing</label><output id="vblendO"></output><input id="vblend" type="range" min="0" max="0.9" step="0.05" value="0.4"></div>
+      <div class="row">
+        <select id="fps" aria-label="Frame rate"><option value="12">12 fps</option><option value="24" selected>24 fps</option><option value="30">30 fps</option></select>
+        <button id="vrender" class="primary" type="button">Render video</button>
+        <button id="vcancel" type="button" hidden>Cancel</button>
+      </div>
+      <progress id="vprog" max="1" value="0" hidden></progress>
+      <div class="row" id="vdoneRow" hidden>
+        <button id="vsave" class="primary" type="button">Save MP4</button>
+        <button id="vview" type="button">Show editor</button>
+      </div>
+      <p class="hint">Renders frame by frame, slower than real time. Output has no sound. Organic and Coral carry one line through the whole clip.</p>
+    </div>
+
+    <div class="group">
+      <span class="label">Output</span>
+      <div class="row">
+        <select id="size" aria-label="Output size">
+          <option value="800">800 px</option>
+          <option value="1200" selected>1200 px</option>
+          <option value="1800">1800 px</option>
+          <option value="2400">2400 px</option>
+          <option value="3200">3200 px (slow in organic)</option>
+        </select>
+        <button id="reseed" type="button">Re-seed</button>
+        <button id="pause" type="button" hidden>Pause</button>
+      </div>
+      <div class="row">
+        <button id="savePng" class="primary" type="button">Save PNG</button>
+        <button id="saveSvg" type="button">Save SVG</button>
+      </div>
+      <p class="hint">SVG is a single path element, ready for a pen plotter.</p>
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const canvas = $('out'), ctx = canvas.getContext('2d');
+const S = { src: null, W: 0, H: 0, L: null, sat: null, toneKey: '', poly: null, growth: null, raf: 0, seed: 7, paused: false, style: 'manhattan', kind: 'grid' };
+
+const HINTS = {
+  manhattan: 'Hilbert-curve walk on a grid that subdivides where the photo is dark.',
+  rounded: 'The same grid walk with its corners turned into arcs.',
+  smooth: 'The grid walk relaxed into a soft, continuous ribbon.',
+  organic: 'Starts from the grid walk, then grows and repels itself into a meandering line.',
+  coral: 'Grows outward from one small loop in the centre. Slower; watch it spread.'
+};
+
+// ---------- utils ----------
+function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2200); }
+
+function P() {
+  const sMin = +$('sMin').value, sMax = Math.max(+$('sMax').value, sMin);
+  return { sMin, sMax, gamma: +$('gamma').value, contrast: +$('contrast').value, bright: +$('bright').value,
+    jitter: +$('jitter').value, detail: +$('detail').value, round: +$('round').value, lw: +$('lw').value, ink: $('ink').value, paper: $('paper').value,
+    invert: $('invert').checked, photo: +$('photo').value, size: +$('size').value };
+}
+const spacing = (b, p) => p.sMin + (p.sMax - p.sMin) * Math.pow(b, p.gamma);
+
+// ---------- demo scene ----------
+function demoScene() {
+  const c = document.createElement('canvas'); c.width = 1200; c.height = 800; const g = c.getContext('2d');
+  let gr = g.createLinearGradient(0, 0, 0, 560); gr.addColorStop(0, '#5d6066'); gr.addColorStop(1, '#e9e7e2');
+  g.fillStyle = gr; g.fillRect(0, 0, 1200, 800);
+  gr = g.createRadialGradient(820, 330, 10, 820, 330, 260); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.35, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 1200, 800);
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(820, 330, 70, 0, 7); g.fill();
+  const ridge = (base, amp, seed, top, bottom) => {
+    const r = rng(seed); g.beginPath(); g.moveTo(0, 800); let y = base;
+    for (let x = 0; x <= 1200; x += 20) { y = base - amp * (Math.sin(x / 170 + seed) * .6 + Math.sin(x / 61 + seed * 2) * .25) - r() * amp * .25; g.lineTo(x, y); }
+    g.lineTo(1200, 800); g.closePath();
+    const lg = g.createLinearGradient(0, base - amp, 0, 800); lg.addColorStop(0, top); lg.addColorStop(1, bottom); g.fillStyle = lg; g.fill();
+  };
+  ridge(470, 120, 1, '#8b8e93', '#9c9fa3');
+  ridge(560, 110, 4, '#55585e', '#6f7277');
+  ridge(670, 90, 9, '#26282c', '#3a3c40');
+  g.fillStyle = '#0d0e10'; g.beginPath(); g.moveTo(0, 800); g.lineTo(0, 700); g.quadraticCurveTo(300, 660, 520, 760); g.lineTo(520, 800); g.fill();
+  return c;
+}
+
+// ---------- tone map ----------
+function prepare(p) {
+  const iw = S.src.width, ih = S.src.height, k = p.size / Math.max(iw, ih);
+  const W = Math.max(16, Math.round(iw * k / 2) * 2), H = Math.max(16, Math.round(ih * k / 2) * 2); // even: video encoders need it
+  const key = [W, H, p.contrast, p.bright, p.invert, p.detail, S.srcId].join('|');
+  if (key === S.toneKey) return;
+  S.W = W; S.H = H; canvas.width = W; canvas.height = H;
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.drawImage(S.src, 0, 0, W, H);
+  const d = g.getImageData(0, 0, W, H).data, N = W * H;
+  let L = new Float32Array(N), T = new Float32Array(N), B = new Float32Array(N);
+  for (let i = 0; i < N; i++) L[i] = (0.2126 * d[4 * i] + 0.7152 * d[4 * i + 1] + 0.0722 * d[4 * i + 2]) / 255;
+  // light denoise: less blur as detail rises
+  const br = Math.max(1, Math.round(W / 600)), passes = p.detail > 0.6 ? 1 : 2;
+  for (let pass = 0; pass < passes; pass++) { boxH(L, T, W, H, br); boxV(T, L, W, H, br); }
+  // unsharp mask: boosts local contrast so small features survive the coarse line spacing
+  if (p.detail > 0) {
+    const R = Math.max(2, Math.round(W / 120)), k = p.detail * 1.4;
+    boxH(L, T, W, H, R); boxV(T, B, W, H, R); boxH(B, T, W, H, R); boxV(T, B, W, H, R);
+    for (let i = 0; i < N; i++) L[i] += k * (L[i] - B[i]);
+  }
+  for (let i = 0; i < N; i++) { let v = (L[i] - 0.5) * p.contrast + 0.5 + p.bright; v = clamp(v, 0, 1); L[i] = p.invert ? 1 - v : v; }
+  // video: blend with the previous frame's tone to calm flicker
+  if (S.blend > 0 && S.prevL && S.prevL.length === N) { const a = S.blend; for (let i = 0; i < N; i++) L[i] = L[i] * (1 - a) + S.prevL[i] * a; }
+  if (S.blend > 0) S.prevL = L.slice();
+  // edge map (Sobel), softened, 0..1 — used to pull the line tighter around outlines
+  const E = new Float32Array(N);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x;
+    const gx = L[i - W + 1] + 2 * L[i + 1] + L[i + W + 1] - L[i - W - 1] - 2 * L[i - 1] - L[i + W - 1];
+    const gy = L[i + W - 1] + 2 * L[i + W] + L[i + W + 1] - L[i - W - 1] - 2 * L[i - W] - L[i - W + 1];
+    E[i] = Math.min(1, Math.sqrt(gx * gx + gy * gy) * 1.5);
+  }
+  const er = Math.max(1, Math.round(W / 400));
+  boxH(E, T, W, H, er); boxV(T, E, W, H, er);
+  for (let i = 0; i < N; i++) E[i] = Math.min(1, E[i] * 2.5);
+  S.L = L; S.E = E; S.sat = makeSat(L, W, H); S.satE = makeSat(E, W, H); S.toneKey = key;
+}
+function makeSat(A, W, H) {
+  const sat = new Float64Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) { let row = 0; for (let x = 0; x < W; x++) { row += A[y * W + x]; sat[(y + 1) * (W + 1) + x + 1] = sat[y * (W + 1) + x + 1] + row; } }
+  return sat;
+}
+// spacing shrinks on edges by up to 70% at full detail
+const edgeScale = (e, p) => 1 - 0.7 * p.detail * e;
+const sp = (x, y, p) => Math.max(1.5, 0.5 * p.sMin, spacing(toneAt(x, y), p) * edgeScale(S.E[clamp(y | 0, 0, S.H - 1) * S.W + clamp(x | 0, 0, S.W - 1)], p));
+function boxH(a, o, W, H, r) { for (let y = 0; y < H; y++) { const b = y * W; let s = 0; for (let x = -r; x <= r; x++) s += a[b + clamp(x, 0, W - 1)]; for (let x = 0; x < W; x++) { o[b + x] = s / (2 * r + 1); s += a[b + Math.min(x + r + 1, W - 1)] - a[b + Math.max(x - r, 0)]; } } }
+function boxV(a, o, W, H, r) { for (let x = 0; x < W; x++) { let s = 0; for (let y = -r; y <= r; y++) s += a[clamp(y, 0, H - 1) * W + x]; for (let y = 0; y < H; y++) { o[y * W + x] = s / (2 * r + 1); s += a[Math.min(y + r + 1, H - 1) * W + x] - a[Math.max(y - r, 0) * W + x]; } } }
+function mean(x0, y0, x1, y1, s = S.sat) {
+  const W = S.W, H = S.H;
+  let a = clamp(Math.floor(x0), 0, W - 1), b = clamp(Math.floor(y0), 0, H - 1);
+  let c = clamp(Math.ceil(x1), a + 1, W), d = clamp(Math.ceil(y1), b + 1, H);
+  const w = W + 1;
+  return (s[d * w + c] - s[b * w + c] - s[d * w + a] + s[b * w + a]) / ((c - a) * (d - b));
+}
+const toneAt = (x, y) => S.L[clamp(y | 0, 0, S.H - 1) * S.W + clamp(x | 0, 0, S.W - 1)];
+
+// ---------- adaptive Hilbert walk (grid) ----------
+// Domain: k unit squares chained end to end, each holding a Hilbert curve whose exit corner
+// touches the next square's entry corner. Leaves are quadtree cells; consecutive leaves share an edge.
+function gridPath(p, scale, rand) {
+  const W = S.W, H = S.H, land = W >= H, ratio = land ? W / H : H / W;
+  const k = Math.max(1, Math.round(ratio));
+  const sx = land ? W / k : W, sy = land ? H : H / k, geo = Math.sqrt(sx * sy);
+  const lv = []; // cx, cy, size (domain units)
+  const MAXLEAVES = 600000;
+  function rec(ox, oy, ax, ay, bx, by) {
+    const s = Math.abs(ax) + Math.abs(ay);
+    const x0 = Math.min(ox, ox + ax + bx), y0 = Math.min(oy, oy + ay + by);
+    const px = s * geo;
+    let split = false;
+    if (px > 2.4 && lv.length < MAXLEAVES * 3) {
+      const h = s / 2; let tmin = Infinity;
+      for (let q = 0; q < 4; q++) {
+        const qx = x0 + (q & 1) * h, qy = y0 + (q >> 1) * h;
+        const X0 = qx * sx, Y0 = qy * sy, X1 = (qx + h) * sx, Y1 = (qy + h) * sy;
+        const tq = spacing(mean(X0, Y0, X1, Y1), p) * edgeScale(mean(X0, Y0, X1, Y1, S.satE), p);
+        if (tq < tmin) tmin = tq;
+      }
+      const t = tmin * scale * (1 + p.jitter * (rand() - 0.5) * 1.2);
+      split = px > t * 1.4142;
+    }
+    if (!split) { lv.push(x0 + s / 2, y0 + s / 2, s); return; }
+    const hax = ax / 2, hay = ay / 2, hbx = bx / 2, hby = by / 2;
+    rec(ox, oy, hbx, hby, hax, hay);
+    rec(ox + hbx, oy + hby, hax, hay, hbx, hby);
+    rec(ox + hbx + hax, oy + hby + hay, hax, hay, hbx, hby);
+    rec(ox + ax + hbx, oy + ay + hby, -hbx, -hby, -hax, -hay);
+  }
+  for (let i = 0; i < k; i++) land ? rec(i, 1, 1, 0, 0, -1) : rec(0, i, 0, 1, 1, 0);
+
+  // Route between consecutive leaf centres with an L whose bend sits inside the larger cell,
+  // so every piece of the route stays inside the two cells it joins (keeps the walk self-avoiding).
+  const n = lv.length / 3, out = [lv[0], lv[1]];
+  for (let i = 1; i < n; i++) {
+    const ax = lv[3 * i - 3], ay = lv[3 * i - 2], as = lv[3 * i - 1], bx = lv[3 * i], by = lv[3 * i + 1], bs = lv[3 * i + 2];
+    if (as !== bs) {
+      const horiz = Math.abs(bx - ax) > Math.abs(by - ay);
+      if (horiz === (as > bs)) out.push(ax, by); else out.push(bx, ay);
+    }
+    out.push(bx, by);
+  }
+  // map to pixels and drop collinear / duplicate vertices
+  const pts = [];
+  for (let i = 0; i < out.length; i += 2) {
+    const x = out[i] * sx, y = out[i + 1] * sy, m = pts.length;
+    if (m >= 2 && pts[m - 2] === x && pts[m - 1] === y) continue;
+    if (m >= 4) {
+      const px = pts[m - 4], py = pts[m - 3], cx = pts[m - 2], cy = pts[m - 1];
+      if ((px === cx && cx === x) || (py === cy && cy === y)) { pts[m - 2] = x; pts[m - 1] = y; continue; }
+    }
+    pts.push(x, y);
+  }
+  return { pts: Float64Array.from(pts), tiles: k, leaves: n };
+}
+
+function chaikin(pts, iters) {
+  let a = pts;
+  for (let it = 0; it < iters; it++) {
+    const n = a.length / 2, b = new Float64Array((n - 1) * 4 + 4); let j = 0;
+    b[j++] = a[0]; b[j++] = a[1];
+    for (let i = 0; i < n - 1; i++) {
+      const x0 = a[2 * i], y0 = a[2 * i + 1], x1 = a[2 * i + 2], y1 = a[2 * i + 3];
+      b[j++] = .75 * x0 + .25 * x1; b[j++] = .75 * y0 + .25 * y1; b[j++] = .25 * x0 + .75 * x1; b[j++] = .25 * y0 + .75 * y1;
+    }
+    b[j++] = a[2 * n - 2]; b[j++] = a[2 * n - 1];
+    a = b.subarray(0, j);
+  }
+  return a;
+}
+
+// ---------- differential growth (organic / coral) ----------
+// Spacing field for the simulation, with its slope limited (|∇r| ≤ K): fine detail keeps its tight
+// spacing, but spacing can only widen gradually away from it. Abrupt jumps let strands tunnel.
+function buildRmap(p) {
+  const g = 2, w = Math.ceil(S.W / g), h = Math.ceil(S.H / g), R = new Float32Array(w * h), K = 0.45;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) R[y * w + x] = sp(x * g + 1, y * g + 1, p);
+  const a = K * g, b = K * g * Math.SQRT2;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x; let v = R[i];
+    if (x > 0) v = Math.min(v, R[i - 1] + a);
+    if (y > 0) { v = Math.min(v, R[i - w] + a); if (x > 0) v = Math.min(v, R[i - w - 1] + b); if (x < w - 1) v = Math.min(v, R[i - w + 1] + b); }
+    R[i] = v;
+  }
+  for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) {
+    const i = y * w + x; let v = R[i];
+    if (x < w - 1) v = Math.min(v, R[i + 1] + a);
+    if (y < h - 1) { v = Math.min(v, R[i + w] + a); if (x < w - 1) v = Math.min(v, R[i + w + 1] + b); if (x > 0) v = Math.min(v, R[i + w - 1] + b); }
+    R[i] = v;
+  }
+  S.Rm = R; S.Rw = w; S.Rh = h;
+}
+const rAt = (x, y) => S.Rm[clamp((y / 2) | 0, 0, S.Rh - 1) * S.Rw + clamp((x / 2) | 0, 0, S.Rw - 1)];
+class Growth {
+  constructor(seed, closed, p, rand) {
+    this.p = p; this.rand = rand; this.closed = closed;
+    const alloc = Math.max(400000, seed.length / 2) + 16;
+    this.alloc = alloc; this.retarget();
+    this.x = new Float32Array(alloc); this.y = new Float32Array(alloc); this.r = new Float32Array(alloc);
+    this.nx = new Float32Array(alloc); this.ny = new Float32Array(alloc);
+    this.prev = new Int32Array(alloc); this.next = new Int32Array(alloc);
+    this.cellOf = new Int32Array(alloc); this.order = new Int32Array(alloc); this.crowd = new Uint16Array(alloc);
+    const n = seed.length / 2; this.n = n;
+    for (let i = 0; i < n; i++) { this.x[i] = seed[2 * i]; this.y[i] = seed[2 * i + 1]; this.prev[i] = i - 1; this.next[i] = i + 1; }
+    this.next[n - 1] = closed ? 0 : -1; this.prev[0] = closed ? n - 1 : -1;
+    this.cell = Math.max(2, p.sMin);
+    this.gw = Math.ceil(S.W / this.cell) + 1; this.gh = Math.ceil(S.H / this.cell) + 1;
+    this.start = new Int32Array(this.gw * this.gh + 1);
+    this.iter = 0; this.quiet = 0; this.done = false;
+  }
+  // node budget for the current spacing field (call after buildRmap)
+  retarget() {
+    let est = 0; const st = 4;
+    for (let y = st / 2; y < S.H; y += st) for (let x = st / 2; x < S.W; x += st) { const r = rAt(x, y); est += st * st / (0.32 * r * r); }
+    this.cap = Math.min(Math.round(est * (this.closed ? 1.4 : 1)), this.alloc - 16);
+    this.quiet = 0; this.done = false;
+  }
+  // video: drop points crowded along the line (where the frame got lighter) and compact the arrays in path order
+  prune() {
+    const { x, y, next } = this, n = this.n;
+    const kx = new Float32Array(n), ky = new Float32Array(n);
+    let i = 0, k = 0, guard = 0, lx = x[0], ly = y[0];
+    kx[k] = lx; ky[k] = ly; k++; i = next[0];
+    while (i >= 0 && i !== 0 && ++guard <= n) {
+      const r = rAt(x[i], y[i]), dx = x[i] - lx, dy = y[i] - ly, tail = next[i] < 0 || next[i] === 0;
+      if (tail || dx * dx + dy * dy > (0.18 * r) * (0.18 * r)) { kx[k] = lx = x[i]; ky[k] = ly = y[i]; k++; }
+      i = next[i];
+    }
+    for (let j = 0; j < k; j++) { this.x[j] = kx[j]; this.y[j] = ky[j]; this.prev[j] = j - 1; this.next[j] = j + 1; }
+    this.next[k - 1] = this.closed ? 0 : -1; this.prev[0] = this.closed ? k - 1 : -1;
+    this.n = k;
+  }
+  step() {
+    const { x, y, r, nx, ny, prev, next, cellOf, order, start, cell, gw, gh, p, rand } = this;
+    const n = this.n, W = S.W, H = S.H;
+    start.fill(0);
+    for (let i = 0; i < n; i++) {
+      r[i] = rAt(x[i], y[i]);
+      const c = ((y[i] / cell) | 0) * gw + ((x[i] / cell) | 0); cellOf[i] = c; start[c + 1]++;
+    }
+    for (let c = 1; c < start.length; c++) start[c] += start[c - 1];
+    const fillp = start.slice(0, start.length - 1);
+    for (let i = 0; i < n; i++) order[fillp[cellOf[i]]++] = i;
+    const KA = 0.35, KR = 0.06;
+    for (let i = 0; i < n; i++) {
+      const xi = x[i], yi = y[i], ri = r[i], pi = prev[i], qi = next[i];
+      let dx = 0, dy = 0;
+      if (pi >= 0 && qi >= 0) { dx += (0.5 * (x[pi] + x[qi]) - xi) * KA; dy += (0.5 * (y[pi] + y[qi]) - yi) * KA; }
+      let rx = 0, ry = 0, cnt = 0; const R = ri * 1.6;
+      const c0 = Math.max(0, ((xi - R) / cell) | 0), c1 = Math.min(gw - 1, ((xi + R) / cell) | 0);
+      const r0 = Math.max(0, ((yi - R) / cell) | 0), r1 = Math.min(gh - 1, ((yi + R) / cell) | 0);
+      for (let cy = r0; cy <= r1; cy++) {
+        for (let cx = c0; cx <= c1; cx++) {
+          const c = cy * gw + cx, e = start[c + 1];
+          for (let k = start[c]; k < e; k++) {
+            const j = order[k]; if (j === i || j === pi || j === qi) continue;
+            const ex = xi - x[j], ey = yi - y[j], d2 = ex * ex + ey * ey;
+            const rij = Math.min(0.5 * (ri + r[j]), R); // symmetric reach, so a fine strand still respects a coarse one
+            if (d2 < rij * rij && d2 > 1e-8) { const d = Math.sqrt(d2), f = (rij - d) / (rij * d); rx += ex * f; ry += ey * f; cnt++; }
+          }
+        }
+      }
+      const wm = 0.5 * ri; // soft walls keep strands off the frame edge
+      if (xi < wm) rx += (wm - xi) / wm; else if (xi > W - wm) rx -= (xi - W + wm) / wm;
+      if (yi < wm) ry += (wm - yi) / wm; else if (yi > H - wm) ry -= (yi - H + wm) / wm;
+      dx += rx * KR * ri + (rand() - 0.5) * 0.02 * ri; dy += ry * KR * ri + (rand() - 0.5) * 0.02 * ri;
+      const m = Math.hypot(dx, dy), mx = 0.15 * ri;
+      if (m > mx) { dx *= mx / m; dy *= mx / m; }
+      nx[i] = clamp(xi + dx, 1, W - 1); ny[i] = clamp(yi + dy, 1, H - 1); this.crowd[i] = cnt;
+    }
+    this.x = nx; this.nx = x; this.y = ny; this.ny = y;
+    // split long edges
+    const X = this.x, Y = this.y; let added = 0;
+    for (let i = 0; i < n && this.n < this.cap; i++) {
+      const q = next[i]; if (q < 0) continue;
+      const ex = X[q] - X[i], ey = Y[q] - Y[i];
+      const me = 0.45 * Math.min(r[i], r[q]);
+      if (ex * ex + ey * ey > me * me) {
+        const m = this.n++;
+        X[m] = (X[i] + X[q]) / 2 + (rand() - .5) * .05; Y[m] = (Y[i] + Y[q]) / 2 + (rand() - .5) * .05; r[m] = r[i];
+        prev[m] = i; next[m] = q; next[i] = m; prev[q] = m; added++;
+      }
+    }
+    // coral: keep feeding growth at random edges so the loop spreads into open space
+    if (this.closed) {
+      const crowd = this.crowd;
+      for (let i = 0; i < n && this.n < this.cap; i++) {
+        if (rand() > 0.08) continue;
+        // count same-strand nodes within reach; anything beyond that is another strand pressing in
+        const rr = r[i] * r[i]; let own = 0;
+        for (let dir = 0; dir < 2; dir++) {
+          let j = dir ? next[next[i]] : prev[prev[i]];
+          for (let h = 0; h < 12 && j >= 0 && j !== i; h++) {
+            const ex = X[j] - X[i], ey = Y[j] - Y[i]; if (ex * ex + ey * ey >= rr) break;
+            own++; j = dir ? next[j] : prev[j];
+          }
+        }
+        if (crowd[i] > own) continue;
+        const q = next[i], m = this.n++;
+        X[m] = (X[i] + X[q]) / 2 + (rand() - .5) * .1; Y[m] = (Y[i] + Y[q]) / 2 + (rand() - .5) * .1; r[m] = r[i];
+        prev[m] = i; next[m] = q; next[i] = m; prev[q] = m; added++;
+      }
+    }
+    this.iter++;
+    this.quiet = added < Math.max(2, n * 0.0005) ? this.quiet + 1 : 0;
+    if ((this.n >= this.cap && this.quiet > 40) || this.quiet > 300 || this.iter > 8000) this.done = true;
+  }
+  ordered() {
+    const out = new Float64Array(this.n * 2 + 2); let j = 0, i = 0, guard = 0;
+    do { out[j++] = this.x[i]; out[j++] = this.y[i]; i = this.next[i]; } while (i >= 0 && i !== 0 && ++guard <= this.n);
+    if (this.closed) { out[j++] = this.x[0]; out[j++] = this.y[0]; }
+    return out.subarray(0, j);
+  }
+}
+
+function resample(pts, p) {
+  const out = [pts[0], pts[1]];
+  for (let i = 2; i < pts.length; i += 2) {
+    const x0 = pts[i - 2], y0 = pts[i - 1], x1 = pts[i], y1 = pts[i + 1];
+    const L = Math.hypot(x1 - x0, y1 - y0), step = 0.4 * rAt(x0, y0), m = Math.max(1, Math.ceil(L / step));
+    for (let k = 1; k <= m; k++) out.push(x0 + (x1 - x0) * k / m, y0 + (y1 - y0) * k / m);
+  }
+  return out;
+}
+
+// ---------- drawing (one emitter feeds canvas and SVG) ----------
+function emit(pen, pts, mode, roundness) {
+  const n = pts.length / 2; if (n < 2) return;
+  pen.M(pts[0], pts[1]);
+  if (mode === 'rounded') {
+    for (let i = 1; i < n - 1; i++) {
+      const px = pts[2 * i], py = pts[2 * i + 1], ax = pts[2 * i - 2], ay = pts[2 * i - 1], bx = pts[2 * i + 2], by = pts[2 * i + 3];
+      const la = Math.hypot(ax - px, ay - py), lb = Math.hypot(bx - px, by - py);
+      const rr = roundness * Math.min(la, lb) / 2;
+      pen.L(px + (ax - px) / la * rr, py + (ay - py) / la * rr);
+      pen.Q(px, py, px + (bx - px) / lb * rr, py + (by - py) / lb * rr);
+    }
+    pen.L(pts[2 * n - 2], pts[2 * n - 1]);
+  } else if (mode === 'curve') {
+    for (let i = 1; i < n - 1; i++) pen.Q(pts[2 * i], pts[2 * i + 1], (pts[2 * i] + pts[2 * i + 2]) / 2, (pts[2 * i + 1] + pts[2 * i + 3]) / 2);
+    pen.L(pts[2 * n - 2], pts[2 * n - 1]);
+  } else {
+    for (let i = 1; i < n; i++) pen.L(pts[2 * i], pts[2 * i + 1]);
+  }
+}
+function drawMode() { return S.style === 'rounded' ? 'rounded' : (S.kind === 'growth' ? 'curve' : 'line'); }
+
+function render() {
+  const p = P(), W = S.W, H = S.H;
+  ctx.globalAlpha = 1; ctx.fillStyle = p.paper; ctx.fillRect(0, 0, W, H);
+  if (p.photo > 0) { ctx.globalAlpha = p.photo; ctx.drawImage(S.src, 0, 0, W, H); ctx.globalAlpha = 1; }
+  const pts = currentPts(); if (!pts) return;
+  ctx.beginPath();
+  emit({ M: (x, y) => ctx.moveTo(x, y), L: (x, y) => ctx.lineTo(x, y), Q: (a, b, c, d) => ctx.quadraticCurveTo(a, b, c, d) }, pts, drawMode(), p.round);
+  ctx.strokeStyle = p.ink; ctx.lineWidth = p.lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+}
+function currentPts() { return S.kind === 'growth' ? (S.growth && S.growth.ordered()) : S.poly; }
+
+// ---------- pipeline ----------
+function stopGrowth() { cancelAnimationFrame(S.raf); S.raf = 0; S.growth = null; }
+
+const isGrowth = st => st === 'organic' || st === 'coral';
+function makeGrowth(p, rand) {
+  buildRmap(p);
+  let seed, closed;
+  if (S.style === 'organic') { seed = resample(gridPath(p, 1.8, rand).pts, p); closed = false; }
+  else {
+    const cx = S.W / 2, cy = S.H / 2, R = Math.min(S.W, S.H) * 0.04, m = Math.max(12, Math.ceil(2 * Math.PI * R / (0.4 * p.sMin)));
+    seed = []; for (let i = 0; i < m; i++) { const a = i / m * Math.PI * 2; seed.push(cx + R * Math.cos(a), cy + R * Math.sin(a)); }
+    closed = true;
+  }
+  return new Growth(seed, closed, p, rand);
+}
+function makeGrid(p, rand) {
+  const g = gridPath(p, 1, rand);
+  S.poly = S.style === 'smooth' ? chaikin(g.pts, 3) : g.pts;
+  return `${g.leaves.toLocaleString()} cells · ${(g.pts.length / 2).toLocaleString()} vertices · ${S.W}×${S.H}`;
+}
+function rebuild() {
+  if (!S.src || S.rendering) return;
+  const p = P(); prepare(p); stopGrowth();
+  const rand = rng(S.seed);
+  if (isGrowth(S.style)) {
+    S.kind = 'growth';
+    S.growth = makeGrowth(p, rand);
+    S.paused = false; $('pause').textContent = 'Pause'; $('pause').hidden = false;
+    loop();
+  } else {
+    S.kind = 'grid'; $('pause').hidden = true;
+    const stat = makeGrid(p, rand);
+    render();
+    $('stat').textContent = stat;
+  }
+}
+
+function loop() {
+  const G = S.growth; if (!G) return;
+  if (!S.paused && !G.done) {
+    const t0 = performance.now();
+    do { G.step(); } while (!G.done && performance.now() - t0 < 14);
+  }
+  render();
+  const pct = Math.min(100, Math.round(G.n / G.cap * 100));
+  $('stat').textContent = `${G.n.toLocaleString()} nodes (${pct}% of budget) · step ${G.iter}${G.done ? ' · settled' : S.paused ? ' · paused' : ''}`;
+  if (G.done) { $('pause').hidden = true; return; }
+  S.raf = requestAnimationFrame(loop);
+}
+
+let deb = 0;
+function schedule(delay) { clearTimeout(deb); deb = setTimeout(rebuild, delay); }
+
+// ---------- export ----------
+async function saveFile(name, blob) {
+  try {
+    if (window.claude && window.claude.use) {
+      const dl = await window.claude.use('downloads');
+      if (dl) { await dl.save({ filename: name, data: blob }); toast('Saved ' + name); return; }
+    }
+  } catch (e) { if (e && e.code === 'declined') return; if (e && e.code && e.code !== 'unavailable') { toast('Could not save: ' + (e.message || e.code)); return; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function svgString() {
+  const p = P(), pts = currentPts(); const d = [];
+  const f = v => Math.round(v * 100) / 100;
+  emit({ M: (x, y) => d.push('M' + f(x) + ' ' + f(y)), L: (x, y) => d.push('L' + f(x) + ' ' + f(y)), Q: (a, b, c, e) => d.push('Q' + f(a) + ' ' + f(b) + ' ' + f(c) + ' ' + f(e)) }, pts, drawMode(), p.round);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${S.W}" height="${S.H}" viewBox="0 0 ${S.W} ${S.H}">\n<rect width="100%" height="100%" fill="${p.paper}"/>\n<path d="${d.join('')}" fill="none" stroke="${p.ink}" stroke-width="${p.lw}" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n`;
+}
+$('savePng').onclick = () => canvas.toBlob(b => b && saveFile('labyrinth-' + S.style + '.png', b), 'image/png');
+$('saveSvg').onclick = () => { if (currentPts()) saveFile('labyrinth-' + S.style + '.svg', new Blob([svgString()], { type: 'image/svg+xml' })); };
+
+// ---------- inputs ----------
+function setSource(img) { S.src = img; S.srcId = (S.srcId || 0) + 1; S.toneKey = ''; schedule(0); }
+function loadFile(file) {
+  if (S.rendering) { toast('Wait for the video render to finish, or cancel it.'); return; }
+  if (file && file.type.startsWith('video/')) { loadVideo(file); return; }
+  if (!file || !file.type.startsWith('image/')) { toast('That file is not an image or video. Try a JPG, PNG or MP4.'); return; }
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => { clearVideo(); setSource(img); URL.revokeObjectURL(url); $('hint2').textContent = file.name; };
+  img.onerror = () => toast('Could not read that image.');
+  img.src = url;
+}
+$('file').onchange = e => loadFile(e.target.files[0]);
+$('demo').onclick = () => { if (S.rendering) return; clearVideo(); setSource(demoScene()); $('hint2').textContent = 'Sample scene'; };
+
+// ---------- video ----------
+function clearVideo() {
+  if (S.video) { URL.revokeObjectURL(S.video.src); S.video = null; }
+  $('videoGroup').hidden = true; showEditor();
+}
+function showEditor() { $('vout').hidden = true; $('vout').pause(); canvas.hidden = false; $('vview').textContent = 'Show video'; }
+function showVideo() { canvas.hidden = true; $('vout').hidden = false; $('vout').play().catch(() => {}); $('vview').textContent = 'Show editor'; }
+$('vview').onclick = () => canvas.hidden ? showEditor() : showVideo();
+
+function seek(v, t) {
+  return new Promise((res, rej) => {
+    if (Math.abs(v.currentTime - t) < 1e-3 && v.readyState >= 2) { res(); return; }
+    const done = () => { v.removeEventListener('seeked', done); clearTimeout(to); res(); };
+    const to = setTimeout(() => { v.removeEventListener('seeked', done); rej(new Error('The video stopped responding while seeking.')); }, 8000);
+    v.addEventListener('seeked', done); v.currentTime = t;
+  });
+}
+function grabFrame(v) {
+  const k = Math.min(1, 1920 / Math.max(v.videoWidth, v.videoHeight));
+  const w = Math.round(v.videoWidth * k), h = Math.round(v.videoHeight * k);
+  if (!S.fc || S.fc.width !== w || S.fc.height !== h) { S.fc = document.createElement('canvas'); S.fc.width = w; S.fc.height = h; }
+  S.fc.getContext('2d').drawImage(v, 0, 0, w, h);
+  return S.fc;
+}
+async function loadVideo(file) {
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(file);
+  try {
+    await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('This browser cannot play that video format. Try an MP4 (H.264) or WebM.')); });
+  } catch (e) { toast(e.message); URL.revokeObjectURL(v.src); return; }
+  if (S.video) URL.revokeObjectURL(S.video.src);
+  S.video = v;
+  const dur = isFinite(v.duration) ? v.duration : 10;
+  $('vstart').max = Math.max(0, Math.floor(dur - 1)); $('vstart').value = 0;
+  $('vlen').max = Math.max(1, Math.min(60, Math.floor(dur))); $('vlen').value = Math.min(8, $('vlen').max);
+  ['vstart', 'vlen'].forEach(id => $(id).dispatchEvent(new Event('input')));
+  $('vinfo').textContent = `${file.name} · ${v.videoWidth}×${v.videoHeight} · ${dur.toFixed(1)} s`;
+  $('videoGroup').hidden = false; $('vdoneRow').hidden = true; showEditor();
+  await seek(v, 0).catch(() => {});
+  $('hint2').textContent = file.name + ' (first frame preview)';
+  S.src = grabFrame(v); S.srcId = (S.srcId || 0) + 1; S.toneKey = ''; schedule(0);
+}
+$('vstart').addEventListener('change', async () => {
+  if (!S.video || S.rendering) return;
+  await seek(S.video, +$('vstart').value).catch(() => {});
+  S.src = grabFrame(S.video); S.srcId++; S.toneKey = ''; schedule(0);
+});
+
+async function makeEncoder(W, H, fps) {
+  if (!('VideoEncoder' in window) || !window.Mp4Muxer) throw new Error('This browser cannot encode video. Try a recent Chrome, Edge or Safari.');
+  const bitrate = Math.min(24e6, Math.round(W * H * fps * 0.22));
+  let cfg = null;
+  for (const codec of ['avc1.640034', 'avc1.4d0034', 'avc1.640028', 'avc1.42003e', 'avc1.42001f']) {
+    const c = { codec, width: W, height: H, bitrate, framerate: fps };
+    try { if ((await VideoEncoder.isConfigSupported(c)).supported) { cfg = c; break; } } catch (e) {}
+  }
+  if (!cfg) throw new Error(`This browser cannot encode ${W}×${H} H.264. Try a smaller output size.`);
+  const target = new Mp4Muxer.ArrayBufferTarget();
+  const muxer = new Mp4Muxer.Muxer({ target, video: { codec: 'avc', width: W, height: H, frameRate: fps }, fastStart: 'in-memory' });
+  const E = { muxer, target, err: null };
+  E.enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: e => { E.err = e; } });
+  E.enc.configure(cfg);
+  return E;
+}
+
+async function renderVideo() {
+  const v = S.video; if (!v || S.rendering) return;
+  const p = P(), fps = +$('fps').value, t0 = +$('vstart').value;
+  const len = Math.min(+$('vlen').value, Math.max(0.1, (isFinite(v.duration) ? v.duration : 1e9) - t0));
+  const frames = Math.max(1, Math.floor(len * fps)), settle = +$('vsteps').value;
+  stopGrowth(); clearTimeout(deb); showEditor();
+  S.rendering = true; S.cancel = false; S.blend = +$('vblend').value; S.prevL = null;
+  $('vrender').disabled = true; $('vcancel').hidden = false; $('vprog').hidden = false; $('vprog').value = 0; $('vdoneRow').hidden = true; $('pause').hidden = true;
+  const growth = isGrowth(S.style); S.kind = growth ? 'growth' : 'grid';
+  let E = null; const started = performance.now();
+  try {
+    for (let f = 0; f < frames; f++) {
+      if (S.cancel) throw new Error('cancelled');
+      await seek(v, Math.min(t0 + f / fps, v.duration - 0.001));
+      S.src = grabFrame(v); S.srcId++; S.toneKey = '';
+      prepare(p);
+      const rand = rng(S.seed);
+      if (growth) {
+        if (f === 0) {
+          S.growth = makeGrowth(p, rand);
+          const tl = performance.now();
+          while (!S.growth.done && S.growth.iter < 600 && performance.now() - tl < 30000) S.growth.step();
+        } else {
+          buildRmap(p); S.growth.retarget(); S.growth.prune();
+          for (let k = 0; k < settle; k++) S.growth.step();
+        }
+      } else makeGrid(p, rand);
+      render();
+      if (!E) E = await makeEncoder(S.W, S.H, fps);
+      if (E.err) throw E.err;
+      const frame = new VideoFrame(canvas, { timestamp: Math.round(f * 1e6 / fps), duration: Math.round(1e6 / fps) });
+      E.enc.encode(frame, { keyFrame: f % (fps * 2) === 0 }); frame.close();
+      while (E.enc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 5));
+      const el = (performance.now() - started) / 1000, eta = el / (f + 1) * (frames - f - 1);
+      $('vprog').value = (f + 1) / frames;
+      $('stat').textContent = `Rendering frame ${f + 1} of ${frames} · ${Math.round(el)} s elapsed · about ${Math.round(eta)} s left`;
+      await new Promise(r => setTimeout(r, 0));
+    }
+    await E.enc.flush(); if (E.err) throw E.err;
+    E.muxer.finalize();
+    const blob = new Blob([E.target.buffer], { type: 'video/mp4' });
+    if (S.videoUrl) URL.revokeObjectURL(S.videoUrl);
+    S.videoBlob = blob; S.videoUrl = URL.createObjectURL(blob);
+    $('vout').src = S.videoUrl; $('vdoneRow').hidden = false; showVideo();
+    $('stat').textContent = `Video ready · ${frames} frames · ${(blob.size / 1048576).toFixed(1)} MB · rendered in ${Math.round((performance.now() - started) / 1000)} s`;
+  } catch (e) {
+    if (E && E.enc.state !== 'closed') try { E.enc.close(); } catch (x) {}
+    $('stat').textContent = e.message === 'cancelled' ? 'Video render cancelled' : 'Video render failed';
+    if (e.message !== 'cancelled') toast(e.message || String(e));
+  } finally {
+    S.rendering = false; S.blend = 0; S.prevL = null;
+    $('vrender').disabled = false; $('vcancel').hidden = true; $('vprog').hidden = true;
+  }
+}
+$('vrender').onclick = renderVideo;
+$('vcancel').onclick = () => { S.cancel = true; };
+$('vsave').onclick = () => { if (S.videoBlob) saveFile('labyrinth-' + S.style + '.mp4', S.videoBlob); };
+const stage = $('stage');
+['dragenter', 'dragover'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.remove('drag'); }));
+stage.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+window.addEventListener('paste', e => { const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/')); if (it) loadFile(it.getAsFile()); });
+
+$('styles').addEventListener('click', e => {
+  const b = e.target.closest('button[data-style]'); if (!b) return;
+  if (S.rendering) { toast('Style is locked while the video renders.'); return; }
+  S.style = b.dataset.style;
+  for (const x of $('styles').children) x.setAttribute('aria-pressed', x === b);
+  $('styleHint').textContent = HINTS[S.style];
+  $('roundCtl').hidden = S.style !== 'rounded';
+  $('jitterCtl').hidden = S.style === 'coral';
+  $('vstepsCtl').hidden = !isGrowth(S.style);
+  if (S.style === 'rounded' && S.kind === 'grid' && S.poly && S.prevStyle === 'manhattan') { S.prevStyle = S.style; render(); return; }
+  S.prevStyle = S.style; schedule(0);
+});
+S.prevStyle = 'manhattan';
+
+const fmt = { sMin: v => v + ' px', sMax: v => v + ' px', gamma: v => (+v).toFixed(2), contrast: v => (+v).toFixed(2), bright: v => (v > 0 ? '+' : '') + (+v).toFixed(2), jitter: v => Math.round(v * 100) + '%', detail: v => Math.round(v * 100) + '%', round: v => Math.round(v * 100) + '%', lw: v => (+v).toFixed(1), photo: v => Math.round(v * 100) + '%',
+  vstart: v => (+v).toFixed(1), vlen: v => v + ' s', vsteps: v => v + ' steps', vblend: v => Math.round(v * 100) + '%' };
+for (const id in fmt) { const o = $(id + 'O'); const upd = () => o.textContent = fmt[id]($(id).value); upd(); $(id).addEventListener('input', upd); }
+const rebuildIds = ['sMin', 'sMax', 'gamma', 'contrast', 'bright', 'jitter', 'detail', 'invert', 'size'];
+rebuildIds.forEach(id => $(id).addEventListener('input', () => schedule(S.kind === 'growth' ? 300 : 60)));
+['lw', 'ink', 'paper', 'photo', 'round'].forEach(id => $(id).addEventListener('input', () => { if (S.kind === 'grid' || (S.growth && (S.growth.done || S.paused))) render(); }));
+$('reseed').onclick = () => { S.seed = (Math.random() * 1e9) | 0; schedule(0); };
+$('pause').onclick = () => { S.paused = !S.paused; $('pause').textContent = S.paused ? 'Resume' : 'Pause'; };
+
+setSource(demoScene());
+window.__lab = { S, gridPath, P, chaikin, loadFile };
+})();
+</script>
