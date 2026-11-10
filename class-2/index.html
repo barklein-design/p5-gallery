@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Class 2 Gallery</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #fff; }
+    body { font: 14px/1.4 system-ui, -apple-system, sans-serif; color: #222; }
+    /* Apps are full pages with their own controls, so keep the arrows in side gutters, off the app */
+    iframe { display: block; border: 0; width: calc(100% - 128px); height: calc(100% - 36px); margin: 0 auto; }
+    .nav {
+      position: fixed; top: 50%; transform: translateY(-50%);
+      width: 44px; height: 44px; border-radius: 50%;
+      border: 1px solid #ddd; background: #fff; color: #333;
+      font-size: 20px; cursor: pointer; display: grid; place-items: center;
+    }
+    .nav:hover { background: #f4f4f4; }
+    .nav:disabled { opacity: .25; cursor: default; background: #fff; }
+    #prev { left: 10px; }
+    #next { right: 10px; }
+    #title {
+      height: 36px; line-height: 36px; text-align: center;
+      font-size: 12px; color: #999;
+    }
+    /* The apps follow the system dark mode, so the frame around them does too */
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #121418; }
+      body { color: #e8eaed; }
+      .nav, .nav:disabled { background: #1b1e23; border-color: #2e333a; color: #e8eaed; }
+      .nav:hover { background: #262a31; }
+      #title { color: #8a919a; }
+    }
+    /* Phones: no room for gutters, so the arrows move into the top bar */
+    @media (max-width: 640px) {
+      iframe { width: 100%; }
+      .nav { top: 2px; transform: none; width: 32px; height: 32px; font-size: 16px; }
+      #prev { left: 8px; }
+      #next { right: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="title"></div>
+  <iframe id="frame" title="app" allow="clipboard-write"></iframe>
+  <button class="nav" id="prev" aria-label="Previous">&#8592;</button>
+  <button class="nav" id="next" aria-label="Next">&#8594;</button>
+
+  <script>
+    // Every apps/<folder>/index.html is an app; nothing to register here.
+    // Live site: apps.json comes from the deploy workflow.
+    // Locally: read the folder listing from python's http.server.
+    async function loadApps() {
+      const res = await fetch('apps.json', { cache: 'no-store' });
+      if (res.ok) return res.json();
+      const html = await (await fetch('apps/', { cache: 'no-store' })).text();
+      const links = new DOMParser().parseFromString(html, 'text/html').querySelectorAll('a');
+      return [...links]
+        .map(a => a.getAttribute('href'))
+        .filter(href => /^[^/.?][^/]*\/$/.test(href))
+        .map(href => decodeURIComponent(href.slice(0, -1)))
+        .sort();
+    }
+
+    // 'shape-grid' -> 'Shape grid'
+    function displayName(folder) {
+      const words = folder.replace(/[-_]+/g, ' ');
+      return words.charAt(0).toUpperCase() + words.slice(1);
+    }
+
+    const frame = document.getElementById('frame');
+    const prev = document.getElementById('prev');
+    const next = document.getElementById('next');
+    const title = document.getElementById('title');
+
+    let APPS = [];
+    let i = 0;
+
+    function show(n) {
+      i = Math.min(Math.max(n, 0), APPS.length - 1);
+      const folder = APPS[i];
+      const name = displayName(folder);
+      frame.src = 'apps/' + encodeURIComponent(folder) + '/index.html';
+      title.textContent = name + '  ·  ' + (i + 1) + ' / ' + APPS.length;
+      document.title = name;
+      history.replaceState(null, '', '#' + encodeURIComponent(folder));
+      prev.disabled = i === 0;
+      next.disabled = i === APPS.length - 1;
+    }
+
+    prev.onclick = () => show(i - 1);
+    next.onclick = () => show(i + 1);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft') show(i - 1);
+      if (e.key === 'ArrowRight') show(i + 1);
+    });
+
+    loadApps().then(list => {
+      APPS = list;
+      show(Math.max(APPS.indexOf(decodeURIComponent(location.hash.slice(1))), 0));
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shape Grid</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: same press bench as Stipple Press. Controls in a tray on the left, the sheet on the right. Stacks on phones. */
+:root {
+  --bg: #eef0f2;
+  --surface: #ffffff;
+  --ink: #15171a;
+  --muted: #5d636b;
+  --line: #d5d9de;
+  --accent: #1f6fd1;
+  --accent-ink: #ffffff;
+  --paper: #ffffff;
+  --danger: #b3261e;
+  --f-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121418; --surface: #1b1e23; --ink: #e8eaed; --muted: #9aa1aa; --line: #2e333a;
+    --accent: #5d9cf0; --accent-ink: #0d1116; --danger: #f2867d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121418; --surface: #1b1e23; --ink: #e8eaed; --muted: #9aa1aa; --line: #2e333a;
+  --accent: #5d9cf0; --accent-ink: #0d1116; --danger: #f2867d; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px; margin: 0;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.02em; margin: 0; line-height: 1.05; }
+h1 .dot { color: var(--accent); }
+.lede { margin: 0; color: var(--muted); max-width: 60ch; }
+.bench { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 820px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.tray { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 18px; }
+.group { display: grid; gap: 12px; }
+.group + .group { border-top: 1px solid var(--line); padding-top: 16px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.drop {
+  position: relative; display: grid; place-items: center; text-align: center; gap: 4px; padding: 18px 12px;
+  border: 1.5px dashed var(--line); border-radius: 8px; cursor: pointer; color: var(--muted); transition: border-color .15s, background .15s;
+}
+.drop strong { color: var(--ink); font-weight: 600; }
+.drop:hover, .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.err { color: var(--danger); font-size: 13px; margin: 0; }
+.field { display: grid; gap: 4px; }
+.field-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.field label, .lbl { font-weight: 500; font-size: 14px; }
+.val { font-family: var(--f-mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
+select { font: 500 14px var(--f-body); padding: 7px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); width: 100%; }
+.check { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: 600 14px var(--f-body); padding: 9px 14px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.primary:hover { filter: brightness(1.07); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shapes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.shapes button { padding: 8px 0 5px; display: grid; justify-items: center; gap: 2px; font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.shapes button svg { width: 22px; height: 22px; fill: currentColor; }
+.shapes button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.colors { display: flex; gap: 14px; flex-wrap: wrap; }
+.colors label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+input[type=color] { width: 34px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.sheet-col { display: grid; gap: 10px; min-width: 0; }
+.sheet-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; border-radius: 0; padding: 7px 14px; font-weight: 500; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.status { font-family: var(--f-mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sheet {
+  background: var(--paper); border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 8px 30px rgba(0,0,0,.08);
+  display: grid; place-items: center; padding: 14px; min-width: 0;
+}
+.sheet canvas, .sheet img { display: block; max-width: 100%; height: auto; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.export-img { display: grid; gap: 8px; }
+.export-img img { max-width: 100%; border: 1px solid var(--line); border-radius: 4px; }
+textarea#svgOut { width: 100%; height: 90px; font: 11px var(--f-mono); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Shape Grid<span class="dot">.</span></h1>
+    <p class="lede">Cuts a photo into a grid and puts one shape in each square. The darker the square, the bigger its shape.</p>
+  </header>
+
+  <div class="bench">
+    <aside class="tray">
+      <div class="group">
+        <p class="eyebrow">Photo</p>
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept="image/*">
+          <span><strong>Choose a photo</strong> or drop it here</span>
+          <span style="font-size:12.5px">You can also paste an image</span>
+        </label>
+        <p class="err" id="err" hidden></p>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Grid</p>
+        <div class="field">
+          <div class="field-head"><label for="cols">Squares across</label><span class="val" id="colsVal"></span></div>
+          <input type="range" id="cols" min="8" max="220" step="1" value="56">
+        </div>
+        <label class="check"><input type="checkbox" id="stagger"> Offset every other row</label>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Shape</p>
+        <div class="shapes" id="shapes" role="group" aria-label="Shapes"></div>
+        <div class="field" id="mixField">
+          <label for="mix">With several shapes picked</label>
+          <select id="mix">
+            <option value="tone">Shape follows brightness</option>
+            <option value="random">Random shape per square</option>
+            <option value="alt">Alternate in a pattern</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="field-head"><label for="angle">Rotation</label><span class="val" id="angleVal"></span></div>
+          <input type="range" id="angle" min="0" max="180" step="1" value="0">
+        </div>
+        <label class="check"><input type="checkbox" id="spin"> Turn shapes with brightness</label>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Size</p>
+        <div class="field">
+          <div class="field-head"><label for="minS">Smallest (lightest squares)</label><span class="val" id="minSVal"></span></div>
+          <input type="range" id="minS" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="field">
+          <div class="field-head"><label for="maxS">Largest (darkest squares)</label><span class="val" id="maxSVal"></span></div>
+          <input type="range" id="maxS" min="0.1" max="1.6" step="0.01" value="1">
+        </div>
+        <label class="check"><input type="checkbox" id="area" checked> Scale by area, so ink matches tone</label>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Tone</p>
+        <div class="field">
+          <div class="field-head"><label for="contrast">Contrast</label><span class="val" id="contrastVal"></span></div>
+          <input type="range" id="contrast" min="0.4" max="3" step="0.05" value="1.2">
+        </div>
+        <div class="field">
+          <div class="field-head"><label for="bright">Brightness</label><span class="val" id="brightVal"></span></div>
+          <input type="range" id="bright" min="-0.5" max="0.5" step="0.02" value="0">
+        </div>
+        <label class="check"><input type="checkbox" id="invert"> Invert (big shapes in light areas)</label>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Color</p>
+        <select id="colorMode" aria-label="Color mode">
+          <option value="ink">One ink color</option>
+          <option value="photo">Each shape takes its square's color</option>
+        </select>
+        <div class="colors">
+          <label id="inkWrap"><input type="color" id="inkC" value="#111111"> Ink</label>
+          <label><input type="color" id="paperC" value="#ffffff"> Paper</label>
+        </div>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Export</p>
+        <div class="btns">
+          <button class="primary" id="makePng" type="button">Make large PNG</button>
+          <button id="copySvg" type="button">Copy SVG</button>
+        </div>
+        <p class="note" id="exportNote">SVG keeps every shape as a vector, ready for vector apps, laser cutters and plotters.</p>
+        <textarea id="svgOut" hidden readonly aria-label="SVG markup"></textarea>
+      </div>
+    </aside>
+
+    <section class="sheet-col">
+      <div class="sheet-bar">
+        <div class="seg" role="group" aria-label="View">
+          <button type="button" id="viewOut" aria-pressed="true">Shapes</button>
+          <button type="button" id="viewOrig" aria-pressed="false">Original</button>
+        </div>
+        <span class="status" id="status">Loading…</span>
+      </div>
+      <div class="sheet" id="sheet">
+        <canvas id="out" aria-label="Shape grid image"></canvas>
+        <img id="orig" alt="Original photo" hidden>
+      </div>
+      <p class="note" id="sampleNote">Showing a built-in sample scene. Add your own photo on the left.</p>
+      <div class="export-img" id="exportBox" hidden>
+        <p class="note">Large PNG (2400 px wide). Right-click it and choose “Save image as”, or long-press on a phone.</p>
+        <img id="pngOut" alt="Shape grid image, large PNG">
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const WORK = 1000; // long side of the sampling image, in pixels
+  const state = { w: 0, h: 0, I: null, cells: null, cw: 0, dy: 0 };
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- shapes, in unit-cell coordinates (fit inside -0.5..0.5) ----------
+  const poly = (n, r, start) => Array.from({ length: n }, (_, i) => {
+    const a = start + i * 2 * Math.PI / n; return [r * Math.cos(a), r * Math.sin(a)];
+  });
+  const star = (() => { const p = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.21 : 0.52; p.push([r * Math.cos(a), r * Math.sin(a) + 0.04]); } return p; })();
+  const a = 0.18;
+  const SHAPES = [
+    { id: "circle", name: "Circle", circle: true },
+    { id: "square", name: "Square", pts: [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]] },
+    { id: "triangle", name: "Triangle", pts: [[0, -.5], [.55, .45], [-.55, .45]] },
+    { id: "diamond", name: "Diamond", pts: [[0, -.55], [.55, 0], [0, .55], [-.55, 0]] },
+    { id: "hexagon", name: "Hexagon", pts: poly(6, .53, -Math.PI / 2) },
+    { id: "plus", name: "Plus", pts: [[-a, -.5], [a, -.5], [a, -a], [.5, -a], [.5, a], [a, a], [a, .5], [-a, .5], [-a, a], [-.5, a], [-.5, -a], [-a, -a]] },
+    { id: "star", name: "Star", pts: star },
+    { id: "bar", name: "Line", bar: true }, // full-width bar whose thickness follows tone
+  ];
+  const picked = new Set(["circle"]);
+
+  // shape buttons with little icons
+  const shapesEl = $("shapes");
+  for (const s of SHAPES) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.id = s.id; b.setAttribute("aria-pressed", picked.has(s.id));
+    let g;
+    if (s.circle) g = `<circle cx="12" cy="12" r="8.5"/>`;
+    else if (s.bar) g = `<rect x="3" y="9" width="18" height="6"/>`;
+    else g = `<polygon points="${s.pts.map(([x, y]) => `${(12 + x * 17).toFixed(1)},${(12 + y * 17).toFixed(1)}`).join(" ")}"/>`;
+    b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${g}</svg>${s.name}`;
+    b.addEventListener("click", e => {
+      // toggle, but always keep at least one shape picked
+      if (picked.has(s.id)) { if (picked.size > 1) picked.delete(s.id); } else picked.add(s.id);
+      for (const el of shapesEl.children) el.setAttribute("aria-pressed", picked.has(el.dataset.id));
+      $("mixField").style.opacity = picked.size > 1 ? 1 : .5;
+      render();
+    });
+    shapesEl.appendChild(b);
+  }
+  $("mixField").style.opacity = .5;
+
+  // ---------- sample scene ----------
+  function sampleScene() {
+    const c = document.createElement("canvas"); c.width = 640; c.height = 480;
+    const g = c.getContext("2d");
+    let bg = g.createLinearGradient(0, 0, 0, 480);
+    bg.addColorStop(0, "#f2efe8"); bg.addColorStop(0.62, "#c9b9a0"); bg.addColorStop(0.62, "#7c8a95"); bg.addColorStop(1, "#d6dde2");
+    g.fillStyle = bg; g.fillRect(0, 0, 640, 480);
+    let sh = g.createRadialGradient(400, 395, 10, 400, 395, 170);
+    sh.addColorStop(0, "rgba(0,0,0,.85)"); sh.addColorStop(1, "rgba(0,0,0,0)");
+    g.save(); g.translate(400, 395); g.scale(1, 0.28); g.translate(-400, -395);
+    g.fillStyle = sh; g.beginPath(); g.arc(400, 395, 170, 0, Math.PI * 2); g.fill(); g.restore();
+    let sp = g.createRadialGradient(250, 170, 8, 300, 240, 150);
+    sp.addColorStop(0, "#fff6e6"); sp.addColorStop(0.35, "#e0763a"); sp.addColorStop(0.8, "#5a1f0c"); sp.addColorStop(1, "#1e0a04");
+    g.fillStyle = sp; g.beginPath(); g.arc(300, 250, 140, 0, Math.PI * 2); g.fill();
+    let bx = g.createLinearGradient(470, 0, 590, 0);
+    bx.addColorStop(0, "#d9e8f2"); bx.addColorStop(1, "#1d3a55");
+    g.fillStyle = bx; g.beginPath(); g.moveTo(530, 170); g.lineTo(595, 385); g.lineTo(465, 385); g.closePath(); g.fill();
+    return c;
+  }
+
+  // ---------- loading: build summed-area tables so any cell's average is O(1) ----------
+  function setSource(source, url) {
+    const sw = source.naturalWidth || source.width, shh = source.naturalHeight || source.height;
+    const k = Math.min(1, WORK / Math.max(sw, shh));
+    const w = Math.max(16, Math.round(sw * k)), h = Math.max(16, Math.round(shh * k));
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
+    g.drawImage(source, 0, 0, w, h);
+    const px = g.getImageData(0, 0, w, h).data;
+    const W1 = w + 1, n = W1 * (h + 1);
+    const I = [new Float64Array(n), new Float64Array(n), new Float64Array(n), new Float64Array(n)]; // lum, r, g, b
+    for (let y = 0; y < h; y++) {
+      const rs = [0, 0, 0, 0];
+      for (let x = 0; x < w; x++) {
+        const j = (y * w + x) * 4, al = px[j + 3] / 255;
+        const r = (px[j] / 255) * al + 1 - al, gg = (px[j + 1] / 255) * al + 1 - al, b = (px[j + 2] / 255) * al + 1 - al;
+        const v = [0.2126 * r + 0.7152 * gg + 0.0722 * b, r, gg, b];
+        const o = (y + 1) * W1 + x + 1;
+        for (let q = 0; q < 4; q++) { rs[q] += v[q]; I[q][o] = I[q][o - W1] + rs[q]; }
+      }
+    }
+    Object.assign(state, { w, h, I });
+    $("orig").src = url;
+    buildCells(); sizeCanvas(); render();
+  }
+
+  function loadFile(f) {
+    $("err").hidden = true;
+    if (!f || !f.type.startsWith("image/")) { showErr("That file isn't an image. Choose a JPG, PNG, WebP or GIF."); return; }
+    const url = URL.createObjectURL(f);
+    const im = new Image();
+    im.onload = () => { $("sampleNote").hidden = true; setSource(im, url); };
+    im.onerror = () => showErr("This image couldn't be read. HEIC photos from iPhone may need converting to JPG first.");
+    im.src = url;
+  }
+  function showErr(m) { $("err").textContent = m; $("err").hidden = false; }
+
+  $("file").addEventListener("change", e => loadFile(e.target.files[0]));
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => loadFile(e.dataTransfer.files[0]));
+  document.addEventListener("dragover", e => e.preventDefault());
+  document.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  document.addEventListener("paste", e => {
+    const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+    if (item) loadFile(item.getAsFile());
+  });
+
+  // ---------- grid ----------
+  function boxAvg(q, x0, y0, x1, y1) {
+    const { I, w } = state, W1 = w + 1, T = I[q];
+    return T[y1 * W1 + x1] - T[y0 * W1 + x1] - T[y1 * W1 + x0] + T[y0 * W1 + x0];
+  }
+  function buildCells() {
+    const { w, h } = state;
+    const cols = +$("cols").value, stagger = $("stagger").checked;
+    const cw = w / cols, dy = stagger ? cw * Math.sqrt(3) / 2 : cw;
+    const rows = Math.ceil(h / dy) + (stagger ? 1 : 0);
+    const cells = [];
+    for (let r = 0; r < rows; r++) {
+      const off = stagger && r % 2 ? cw / 2 : 0;
+      const cy = (r + 0.5) * dy;
+      for (let c = off ? -1 : 0; c < cols; c++) {
+        const cx = off + (c + 0.5) * cw;
+        const x0 = Math.max(0, Math.round(cx - cw / 2)), x1 = Math.min(w, Math.round(cx + cw / 2));
+        const y0 = Math.max(0, Math.round(cy - dy / 2)), y1 = Math.min(h, Math.round(cy + dy / 2));
+        const area = (x1 - x0) * (y1 - y0);
+        if (area <= 0) continue;
+        cells.push({
+          x: cx, y: cy, row: r, col: c,
+          l: boxAvg(0, x0, y0, x1, y1) / area,
+          r: boxAvg(1, x0, y0, x1, y1) / area, g: boxAvg(2, x0, y0, x1, y1) / area, b: boxAvg(3, x0, y0, x1, y1) / area,
+        });
+      }
+    }
+    Object.assign(state, { cells, cw, dy, cols, rows });
+  }
+
+  // stable pseudo-random per cell
+  const hash = (a, b) => { let x = Math.imul(a * 374761393 + b * 668265263, 1274126177); x ^= x >>> 15; x = Math.imul(x, 2246822519); x ^= x >>> 13; return (x >>> 0) / 4294967296; };
+
+  // ---------- layout: one shape per cell, in output pixel coordinates ----------
+  function layout(k) {
+    const contrast = +$("contrast").value, bright = +$("bright").value, inv = $("invert").checked;
+    const minS = +$("minS").value, maxS = +$("maxS").value, useArea = $("area").checked;
+    const base = +$("angle").value * Math.PI / 180, spin = $("spin").checked;
+    const mix = $("mix").value, photo = $("colorMode").value === "photo";
+    const list = SHAPES.filter(s => picked.has(s.id)), nS = list.length;
+    const cell = state.cw * k, items = [];
+    for (const c of state.cells) {
+      let l = (c.l - 0.5) * contrast + 0.5 + bright;
+      l = Math.min(1, Math.max(0, l));
+      const t = inv ? l : 1 - l;                          // 0 = paper, 1 = full ink
+      const f = minS + (maxS - minS) * (useArea ? Math.sqrt(t) : t);
+      if (f <= 0.005) continue;
+      let shape = list[0];
+      if (nS > 1) {
+        if (mix === "tone") shape = list[Math.min(nS - 1, Math.floor(t * nS))];
+        else if (mix === "random") shape = list[Math.floor(hash(c.row, c.col) * nS)];
+        else shape = list[((c.row + c.col) % nS + nS) % nS];
+      }
+      const ang = base + (spin ? t * Math.PI / 2 : 0);
+      const x = c.x * k, y = c.y * k;
+      let col = null;
+      if (photo) {
+        col = `rgb(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)})`;
+      }
+      if (shape.circle) { items.push({ c: true, x, y, r: f * cell / 2, col }); continue; }
+      let pts;
+      if (shape.bar) { const th = Math.min(1.6, f) / 2; pts = [[-.5, -th], [.5, -th], [.5, th], [-.5, th]]; }
+      else pts = shape.pts.map(([px, py]) => [px * f, py * f]);
+      const cs = Math.cos(ang), sn = Math.sin(ang), out = new Float32Array(pts.length * 2);
+      pts.forEach(([px, py], i) => { out[2 * i] = x + (px * cs - py * sn) * cell; out[2 * i + 1] = y + (px * sn + py * cs) * cell; });
+      items.push({ c: false, pts: out, col });
+    }
+    return items;
+  }
+
+  // ---------- rendering ----------
+  const out = $("out"), ctx = out.getContext("2d");
+  function sizeCanvas() {
+    const sheet = $("sheet");
+    const availW = Math.max(200, sheet.clientWidth - 28);
+    const availH = Math.max(240, Math.min(window.innerHeight * 0.78, 900));
+    const k = Math.min(availW / state.w, availH / state.h);
+    const cssW = Math.round(state.w * k), cssH = Math.round(state.h * k);
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    out.style.width = cssW + "px"; out.style.height = cssH + "px";
+    out.width = Math.round(cssW * dpr); out.height = Math.round(cssH * dpr);
+    $("orig").style.width = cssW + "px";
+  }
+  function trace(g, it) {
+    if (it.c) { g.moveTo(it.x + it.r, it.y); g.arc(it.x, it.y, it.r, 0, Math.PI * 2); return; }
+    const p = it.pts; g.moveTo(p[0], p[1]);
+    for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]);
+    g.closePath();
+  }
+  function drawTo(c, g) {
+    const items = layout(c.width / state.w);
+    g.fillStyle = $("paperC").value; g.fillRect(0, 0, c.width, c.height);
+    if ($("colorMode").value === "photo") {
+      for (const it of items) { g.fillStyle = it.col; g.beginPath(); trace(g, it); g.fill(); }
+    } else {
+      g.fillStyle = $("inkC").value; g.beginPath();
+      for (const it of items) trace(g, it);
+      g.fill("nonzero");
+    }
+    return items.length;
+  }
+  function render() {
+    if (!state.cells) return;
+    const t0 = performance.now();
+    const n = drawTo(out, ctx);
+    $("sheet").style.background = $("paperC").value;
+    $("status").textContent = `${state.cols} × ${state.rows} grid · ${n.toLocaleString()} shapes · ${Math.round(performance.now() - t0)} ms`;
+    $("exportBox").hidden = true; $("svgOut").hidden = true;
+  }
+
+  // ---------- controls ----------
+  const fmt = {
+    cols: v => v, angle: v => v + "°", minS: v => Math.round(v * 100) + "%", maxS: v => Math.round(v * 100) + "%",
+    contrast: v => (+v).toFixed(2), bright: v => (v > 0 ? "+" : "") + Math.round(v * 100),
+  };
+  for (const id in fmt) {
+    const el = $(id), show = () => ($(id + "Val").textContent = fmt[id](el.value));
+    show(); el.addEventListener("input", show);
+  }
+  let raf = 0;
+  const schedule = fn => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fn); };
+  ["cols"].forEach(id => $(id).addEventListener("input", () => schedule(() => { buildCells(); render(); })));
+  $("stagger").addEventListener("change", () => { buildCells(); render(); });
+  ["angle", "minS", "maxS", "contrast", "bright", "inkC", "paperC"].forEach(id => $(id).addEventListener("input", () => schedule(render)));
+  ["spin", "area", "invert", "mix", "colorMode"].forEach(id => $(id).addEventListener("change", render));
+  $("colorMode").addEventListener("change", () => { $("inkWrap").style.opacity = $("colorMode").value === "ink" ? 1 : .4; });
+
+  let rz;
+  window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (state.w) { sizeCanvas(); render(); } }, 150); });
+
+  function setView(shapes) {
+    $("viewOut").setAttribute("aria-pressed", shapes); $("viewOrig").setAttribute("aria-pressed", !shapes);
+    out.hidden = !shapes; $("orig").hidden = shapes;
+  }
+  $("viewOut").addEventListener("click", () => setView(true));
+  $("viewOrig").addEventListener("click", () => setView(false));
+
+  // ---------- export ----------
+  $("makePng").addEventListener("click", () => {
+    const c = document.createElement("canvas");
+    c.width = 2400; c.height = Math.round(2400 * state.h / state.w);
+    drawTo(c, c.getContext("2d"));
+    $("pngOut").src = c.toDataURL("image/png");
+    $("exportBox").hidden = false;
+    $("exportBox").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+  });
+
+  function svgString() {
+    const W = 1000, k = W / state.w, H = Math.round(state.h * k);
+    const items = layout(k), photo = $("colorMode").value === "photo", f = v => v.toFixed(2);
+    const d = it => {
+      if (it.c) return `M${f(it.x - it.r)} ${f(it.y)}a${f(it.r)} ${f(it.r)} 0 1 0 ${f(2 * it.r)} 0a${f(it.r)} ${f(it.r)} 0 1 0 ${f(-2 * it.r)} 0Z`;
+      const p = it.pts; let s = `M${f(p[0])} ${f(p[1])}`;
+      for (let i = 2; i < p.length; i += 2) s += `L${f(p[i])} ${f(p[i + 1])}`;
+      return s + "Z";
+    };
+    const body = photo
+      ? items.map(it => `<path fill="${it.col}" d="${d(it)}"/>`).join("")
+      : `<path fill="${$("inkC").value}" d="${items.map(d).join("")}"/>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="100%" height="100%" fill="${$("paperC").value}"/>${body}</svg>`;
+  }
+  $("copySvg").addEventListener("click", () => {
+    const s = svgString(), note = $("exportNote"), ta = $("svgOut");
+    const fallback = () => {
+      ta.value = s; ta.hidden = false; ta.focus(); ta.select();
+      note.textContent = "Copying was blocked here. The SVG is selected below; press Ctrl+C or ⌘C.";
+    };
+    try {
+      navigator.clipboard.writeText(s).then(() => { note.textContent = "Copied the SVG. Paste it into a .svg file or a vector app."; }, fallback);
+    } catch (e) { fallback(); }
+  });
+
+  // ---------- start ----------
+  const sc = sampleScene();
+  setSource(sc, sc.toDataURL("image/png"));
+})();
+</script>

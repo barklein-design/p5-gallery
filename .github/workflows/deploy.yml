@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # Queue deploys instead of cancelling them: merging several PRs in a row
+  # once left the site without a deploy for the last merges
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -28,6 +30,12 @@ jobs:
           find sketches -mindepth 2 -maxdepth 2 -name sketch.js \
             | cut -d/ -f2 | sort | jq -R . | jq -s . > sketches.json
           cat sketches.json
+      # Class 2: list every class-2/apps/<folder>/index.html
+      - name: Generate class-2/apps.json
+        run: |
+          find class-2/apps -mindepth 2 -maxdepth 2 -name index.html \
+            | cut -d/ -f3 | sort | jq -R . | jq -s . > class-2/apps.json
+          cat class-2/apps.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .

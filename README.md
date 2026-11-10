@@ -4,6 +4,8 @@ A tiny gallery of small [p5.js](https://p5js.org) sketches. Flip between them wi
 
 **Live:** https://omrialloro.github.io/p5-gallery/ (updates automatically after each merge to `main`)
 
+**Class 2 gallery:** https://omrialloro.github.io/p5-gallery/class-2/ shows full web apps. Each app is a folder `class-2/apps/<name>/` with its own `index.html`, found automatically like the sketches.
+
 ## Run it locally
 
 Clone the repo and serve the folder with Python's built-in server, which is how the gallery finds the sketches locally. Opening `index.html` directly from disk won't work.
